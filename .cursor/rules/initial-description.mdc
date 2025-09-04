@@ -1,0 +1,125 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+You are an expert software engineer. Build an MVP platform as a set of Dockerized microservices for a pharmaceutical distributor. Keep diffs minimal but robust, follow SOLID, add type hints and docstrings, and avoid any outbound network calls at runtime (package registries only during image build).
+
+OBJECTIVES
+
+Input: a text plus optional metadata (url, date, both may be null).
+
+Evaluate the text against Russian-language criteria (“критерии”).
+
+If a criterion matches (“event fixation”), produce a short summary and persist an event record.
+
+Deduplicate by SHA-256 of normalized text (trim spaces, Unicode NFC). Skip re-analysis unless force_recheck=true.
+
+Asynchronous analysis with a local LLM via Ollama (CPU-only), model family Llama 8B (expose model name and parameters via env; use the model’s max context and available “maximal” generation parameters by default).
+
+UI: Streamlit (Russian UI), minimal: submit text/metadata → enqueue job → show job status/logs → show latest events with filters.
+
+No Superset in MVP (reserved for v0.2).
+
+ARCHITECTURE & PORTS (all ports = standard + 4)
+
+ui (Streamlit) → 8505
+
+worker (Python, RQ/Redis consumer)
+
+redis → 6383
+
+pg (PostgreSQL) → 5436
+
+ch (ClickHouse HTTP) → 8127, native → 9004
+
+llm (Ollama REST) → 11438
+
+Add a pre-flight script (invoked before compose up) that fails fast if any of the above ports are already in use.
+
+DATA STORES & SCHEMA
+
+PostgreSQL (OLTP / source registry)
+
+sources(id UUID PK, source_hash TEXT UNIQUE, source_url TEXT NULL, source_date TIMESTAMPTZ NULL, ingest_ts TIMESTAMPTZ NOT NULL, force_recheck BOOLEAN DEFAULT FALSE)
+
+criteria(id TEXT PK, criterion_text TEXT NOT NULL, criteria_version INT NOT NULL DEFAULT 1, is_active BOOLEAN DEFAULT TRUE, threshold REAL NULL)
+
+ClickHouse (analytics / events)
+
+events(event_id UUID, source_hash String, source_url Nullable(String), source_date Nullable(DateTime64), ingest_ts DateTime64, criterion_id String, criterion_text String, is_match UInt8, confidence Float32, summary String, model_name String, latency_ms UInt32) ENGINE = MergeTree PARTITION BY toYYYYMM(ingest_ts) ORDER BY (ingest_ts, source_hash)
+
+Seed criteria with at least one item, e.g.:
+criterion_id: "molecules_pretrial_v1"; criterion_text (ru): "Идет ли речь о предварительных испытаниях молекул (МНН) из списка: интерферон человеческий, гиотриф, фулвестрант?"
+
+PROCESSING FLOW
+
+UI enqueues a job with {text, url?, date?, force_recheck?} to Redis (RQ).
+
+Worker:
+
+Normalize text (trim, NFC), compute SHA-256.
+
+If source_hash exists in PG and force_recheck is false ⇒ skip (idempotency).
+
+For each active criterion (PG): call Ollama with a Russian system/user prompt; request: {is_match, confidence, summary}.
+
+Write events into ClickHouse; write/merge source and criteria metadata into Postgres.
+
+No explicit concurrency or timeout caps (use process defaults; make both configurable via env for future).
+
+UI shows status, logs, last N events with filters; no export in MVP.
+
+LLM SERVICE (Ollama)
+
+Service env: OLLAMA_MODEL (default e.g. llama3:8b), NUM_CTX (set to model’s max), plus typical generation knobs exposed via env (temperature/top_p/top_k/max_tokens, default to high/“maximal” safe values).
+
+Use /api/generate with streaming off for deterministic post-processing; return latency for latency_ms.
+
+SECURITY & OBSERVABILITY
+
+No outbound HTTP at runtime; secrets only via .env / Docker secrets.
+
+Structured logs (JSON) without PII.
+
+Health checks for all services.
+
+DELIVERABLES (every task)
+
+Plan (≤15 lines).
+
+Changeset: file tree + concise key diffs.
+
+Run: exact commands (docker compose build, pre-flight, up).
+
+Tests: unit (normalize/hash), integration (queue pipeline), LLM smoke (mock allowed), health checks.
+
+Minimal README with envs and ports table.
+
+One conventional commit per feature.
+
+WORKFLOW
+
+If a detail is missing, ask one concise question, then proceed with explicit Assumptions in the commit body.
+
+Keep diffs minimal; no broad refactors unless required.
+
+ACCEPTANCE CRITERIA
+
+docker compose up brings all services up with +4 port offsets; pre-flight port check passes.
+
+PG migrations and CH DDL apply cleanly and are idempotent.
+
+Duplicate source_hash is skipped unless force_recheck=true.
+
+Events stored with non-empty summary for positive matches; model_name and latency_ms recorded.
+
+Tests green locally; logs are structured; no secrets in VCS.
+
+PROHIBITIONS
+
+Hard-coded credentials or internal URLs.
+
+Network egress at runtime.
+
+Non-deterministic tests without justification.

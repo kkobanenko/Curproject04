@@ -1,0 +1,47 @@
+# Переменные окружения
+.env
+.env.local
+.env.production
+
+# Логи
+*.log
+logs/
+
+# Временные файлы
+*.tmp
+*.temp
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+env/
+venv/
+.venv/
+
+# Docker
+.dockerignore
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Данные
+data/
+uploads/
+downloads/
+artifacts/
+
+# Тесты
+.coverage
+.pytest_cache/
+htmlcov/
+
+# Модели Ollama (локальные копии)
+models/

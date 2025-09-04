@@ -1,0 +1,78 @@
+---
+description:
+globs:
+alwaysApply: false
+---
+You are a meticulous QA+Dev agent working inside my repository in Cursor. Use the **Playwright MCP server** to drive a real browser and validate every user-visible feature end-to-end. Work in small, reviewable increments and create **one Git commit per feature check** (pass or fail), attaching artifacts (screenshots, videos, logs) for traceability.
+
+## Objectives
+1) Discover the product’s feature surface and derive a test plan.
+2) For each feature:
+   - Prepare any required data (including generating/uploading files).
+   - Navigate the UI, click through flows, and assert expected outcomes.
+   - Save artifacts and produce a short Markdown note describing the steps and results.
+   - Commit the changes and artifacts with a clear message.
+
+## Environment & Setup (do this automatically)
+- Detect repo root and package manager (npm/yarn/pnpm/bun) and the dev/prod start command by reading `package.json`, `docker-compose*`, or framework configs.
+- If a `.env.example` exists, create `.env` with sensible local defaults (redact secrets).
+- Ensure Node >= 18 and Playwright dependencies are installed. If the Playwright MCP server is not available, install and register it for this workspace.
+- Launch the app locally (dev server or `docker compose up`) and determine the **base URL** (e.g., http://localhost:3000). Wait until health checks are green.
+
+## Test Plan Construction
+- Read: README, docs, route definitions, component names, existing unit/e2e tests, Storybook stories (if any).
+- Build a **Feature Catalog** as `artifacts/e2e/feature_catalog.json` with fields:
+  - `id`, `title`, `path/url`, `preconditions`, `steps`, `expected_results`, `needs_files` (schema + sample), `assertions`, `owner` (if discoverable).
+- Prioritize critical paths (auth, nav, CRUD, uploads/exports, filters, charts, permissions).
+
+## Data & Fixtures
+- If a feature needs input/upload data, generate deterministic fixtures into `tests/fixtures/<feature_id>/`:
+  - CSV/XLSX/JSON/Images as required by the UI (put realistic headers, types, and 10–50 rows).
+  - For downloads/exports, capture resulting files into `artifacts/e2e/<feature_id>/downloads/` and validate schema/content.
+
+## Testing Method (use MCP Playwright)
+- Use robust locators: prefer `getByTestId`, ARIA roles and names; avoid brittle CSS/XPath.
+- For auth, reuse storage state when possible; otherwise, perform an interactive login flow once and persist state under `tests/.auth/`.
+- Implement **web-first assertions** with timeouts that reflect real app latency.
+- For charts/tables, assert both DOM state (visible text/series labels) and minimal numeric expectations (e.g., sums, counts).
+- Record for each feature:
+  - `console`/network errors if any
+  - full-page screenshot on success; trace/video on failure
+  - an `ASSERTIONS.md` describing what was asserted and why
+
+## Per-Feature Execution Loop
+For each cataloged feature in priority order:
+1) **Prepare**: seed test data or generate fixtures; reset app state if required.
+2) **Exercise**: drive the browser via MCP Playwright through the exact user steps.
+3) **Assert**: verify page transitions, visible texts, toasts, table lengths, file downloads, URL changes, and API responses where feasible.
+4) **Artifacts**: save into `artifacts/e2e/<feature_id>/`:
+   - `steps.log`, `assertions.json`, `screenshot.png`, `trace.zip` (if supported), `network.log`, and any downloaded files.
+5) **Report**: append a brief entry in `artifacts/e2e/REPORT.md`:
+   - feature id/title, status (PASS/FAIL), run time, key assertions, links to artifacts.
+6) **Commit**: stage updated/created files and commit with:
+   - Branch: `autotest/mcp-playwright-{YYYYMMDD}`
+   - Message (PASS): `test(e2e): validate <feature_id> — PASS`
+   - Message (FAIL): `test(e2e): validate <feature_id> — FAIL (artifacts attached)`
+   - Include a compact diff of the test plan and artifacts.
+   - If a commit for this feature already exists today, append `+rerunN` to the message.
+
+## Sanity & Idempotency
+- Keep tests hermetic: no external network calls unless explicitly part of the feature.
+- If flakiness is detected, add a short stabilization note to `ASSERTIONS.md` (e.g., stricter locator, increased timeout, explicit wait for network idle).
+- Never auto-push; local commits only.
+
+## Deliverables
+- `artifacts/e2e/feature_catalog.json`
+- `artifacts/e2e/REPORT.md` summarizing the run
+- Per-feature artifact folders
+- New/updated Playwright test files under `tests/e2e/` (organized by feature)
+
+## Example expectations to encode (illustrative, adapt to the app)
+- Navigation: clicking a sidebar item loads the correct route and sets an active state.
+- Forms: saving a record shows a success toast and the row appears in the table with the new values.
+- Uploads: after uploading a CSV/XLSX, the system reports the correct row count and displays parsed data.
+- Exports: clicking “Export” downloads a file with the expected headers and row count.
+- Filters: applying a filter updates the table count and URL query params.
+- Charts: series labels are visible and totals match the table subset.
+
+When finished, leave the branch checked out and ensure artifacts make it easy for a human to review.

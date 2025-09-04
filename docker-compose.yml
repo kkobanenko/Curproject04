@@ -1,0 +1,123 @@
+version: '3.8'
+
+services:
+  # UI сервис - Streamlit
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+    ports:
+      - "8505:8501"
+    environment:
+      - REDIS_URL=redis://redis:6383/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg:5436/pharma_analysis
+      - CLICKHOUSE_URL=http://ch:8127
+      - OLLAMA_URL=http://llm:11438
+    depends_on:
+      - redis
+      - pg
+      - ch
+      - llm
+    volumes:
+      - ./ui:/app
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Worker сервис - Python RQ consumer
+  worker:
+    build:
+      context: ./worker
+      dockerfile: Dockerfile
+    environment:
+      - REDIS_URL=redis://redis:6383/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg:5436/pharma_analysis
+      - CLICKHOUSE_URL=http://ch:8127
+      - OLLAMA_URL=http://llm:11438
+      - OLLAMA_MODEL=llama3:8b
+      - NUM_CTX=8192
+    depends_on:
+      - redis
+      - pg
+      - ch
+      - llm
+    volumes:
+      - ./worker:/app
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.Redis.from_url('redis://redis:6383/0').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis для очередей
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6383:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # PostgreSQL для источников и критериев
+  pg:
+    image: postgres:15-alpine
+    ports:
+      - "5436:5432"
+    environment:
+      - POSTGRES_DB=pharma_analysis
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pharma_analysis"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # ClickHouse для аналитики событий
+  ch:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    ports:
+      - "8127:8123"  # HTTP
+      - "9004:9000"  # Native
+    environment:
+      - CLICKHOUSE_DB=pharma_analysis
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - ./db/clickhouse:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # LLM сервис - Ollama
+  llm:
+    image: ollama/ollama:latest
+    ports:
+      - "11438:11434"
+    environment:
+      - OLLAMA_MODELS=llama3:8b
+    volumes:
+      - ollama_data:/root/.ollama
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:11434/api/tags"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+volumes:
+  redis_data:
+  postgres_data:
+  clickhouse_data:
+  ollama_data:
