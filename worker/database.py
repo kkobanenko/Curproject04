@@ -89,10 +89,12 @@ class ClickHouseManager:
     
     def __init__(self):
         """Инициализация подключения к ClickHouse"""
+        # Извлекаем хост из URL (убираем http:// и порт)
+        host = settings.clickhouse_url.replace('http://', '').split(':')[0]
         self.client = Client(
-            host=settings.clickhouse_url.replace('http://', ''),
+            host=host,
             database=settings.clickhouse_database,
-            port=8123
+            port=9000
         )
     
     def insert_event(self, event: Event) -> bool:
