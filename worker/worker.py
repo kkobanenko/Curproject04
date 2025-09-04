@@ -120,10 +120,7 @@ def main():
     worker = Worker(
         [queue],
         connection=redis_conn,
-        name=f'pharma-worker-{os.getpid()}',
-        job_timeout=settings.task_timeout,
-        result_ttl=3600,  # 1 час
-        failure_ttl=7200  # 2 часа
+        name=f'pharma-worker-{os.getpid()}'
     )
     
     logger.info(f"Worker {worker.name} запущен")

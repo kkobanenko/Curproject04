@@ -9,10 +9,10 @@ services:
     ports:
       - "8505:8501"
     environment:
-      - REDIS_URL=redis://redis:6383/0
-      - POSTGRES_URL=postgresql://postgres:postgres@pg:5436/pharma_analysis
-      - CLICKHOUSE_URL=http://ch:8127
-      - OLLAMA_URL=http://llm:11438
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg:5432/pharma_analysis
+      - CLICKHOUSE_URL=http://ch:8123
+      - OLLAMA_URL=http://llm:11434
     depends_on:
       - redis
       - pg
@@ -31,11 +31,13 @@ services:
     build:
       context: ./worker
       dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
     environment:
-      - REDIS_URL=redis://redis:6383/0
-      - POSTGRES_URL=postgresql://postgres:postgres@pg:5436/pharma_analysis
-      - CLICKHOUSE_URL=http://ch:8127
-      - OLLAMA_URL=http://llm:11438
+      - REDIS_URL=redis://redis:6379/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg:5432/pharma_analysis
+      - CLICKHOUSE_URL=http://ch:8123
+      - OLLAMA_URL=http://llm:11434
       - OLLAMA_MODEL=llama3:8b
       - NUM_CTX=8192
     depends_on:
@@ -46,7 +48,7 @@ services:
     volumes:
       - ./worker:/app
     healthcheck:
-      test: ["CMD", "python", "-c", "import redis; redis.Redis.from_url('redis://redis:6383/0').ping()"]
+      test: ["CMD", "python", "-c", "import redis; redis.Redis.from_url('redis://redis:6379/0').ping()"]
       interval: 30s
       timeout: 10s
       retries: 3

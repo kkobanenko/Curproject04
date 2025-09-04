@@ -32,36 +32,6 @@ CREATE INDEX IF NOT EXISTS idx_events_criterion_id ON events(criterion_id) TYPE 
 CREATE INDEX IF NOT EXISTS idx_events_is_match ON events(is_match) TYPE bloom_filter GRANULARITY 1;
 CREATE INDEX IF NOT EXISTS idx_events_source_hash ON events(source_hash) TYPE bloom_filter GRANULARITY 1;
 
--- Материализованное представление для статистики по критериям
-CREATE MATERIALIZED VIEW IF NOT EXISTS criteria_stats
-ENGINE = SummingMergeTree()
-PARTITION BY toYYYYMM(ingest_ts)
-ORDER BY (criterion_id, toDate(ingest_ts))
-AS SELECT
-    criterion_id,
-    toDate(ingest_ts) as date,
-    count() as total_events,
-    sum(is_match) as matches,
-    avg(confidence) as avg_confidence,
-    avg(latency_ms) as avg_latency_ms
-FROM events
-GROUP BY criterion_id, toDate(ingest_ts);
-
--- Материализованное представление для статистики по источникам
-CREATE MATERIALIZED VIEW IF NOT EXISTS source_stats
-ENGINE = SummingMergeTree()
-PARTITION BY toYYYYMM(ingest_ts)
-ORDER BY (source_hash, toDate(ingest_ts))
-AS SELECT
-    source_hash,
-    source_url,
-    toDate(ingest_ts) as date,
-    count() as total_events,
-    sum(is_match) as matches,
-    avg(confidence) as avg_confidence
-FROM events
-GROUP BY source_hash, source_url, toDate(ingest_ts);
-
 -- Комментарии к таблице
 ALTER TABLE events COMMENT COLUMN event_id = 'Уникальный идентификатор события';
 ALTER TABLE events COMMENT COLUMN source_hash = 'SHA-256 хеш нормализованного текста';

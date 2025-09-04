@@ -1,31 +1,31 @@
 FROM python:3.11-slim
 
-# Устанавливаем системные зависимости
+# Установка системных зависимостей
 RUN apt-get update && apt-get install -y \
     gcc \
     g++ \
     curl \
     && rm -rf /var/lib/apt/lists/*
 
-# Устанавливаем рабочую директорию
+# Установка рабочей директории
 WORKDIR /app
 
-# Копируем файлы зависимостей
+# Копирование и установка зависимостей
 COPY requirements.txt .
-
-# Устанавливаем Python зависимости
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Копируем код приложения
+# Копирование кода приложения
 COPY . .
 
-# Создаем пользователя для безопасности
+# Создание пользователя streamlit
 RUN useradd --create-home --shell /bin/bash streamlit && \
     chown -R streamlit:streamlit /app
+
+# Переключение на пользователя streamlit
 USER streamlit
 
-# Expose порт Streamlit
+# Открытие порта
 EXPOSE 8501
 
-# Запускаем Streamlit
-CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+# Запуск приложения
+CMD ["streamlit", "run", "app_demo.py", "--server.port=8501", "--server.address=0.0.0.0"]
