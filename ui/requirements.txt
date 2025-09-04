@@ -1,0 +1,27 @@
+# Streamlit и веб-фреймворки
+streamlit==1.29.0
+flask==3.0.0
+
+# База данных
+psycopg2-binary==2.9.9
+clickhouse-driver==0.2.6
+redis==5.0.1
+
+# HTTP клиенты
+requests==2.31.0
+
+# Утилиты
+python-dotenv==1.0.0
+pydantic==2.5.0
+pydantic-settings==2.1.0
+
+# Логирование
+structlog==23.2.0
+
+# Тестирование
+pytest==7.4.3
+pytest-mock==3.12.0
+
+# Дополнительные библиотеки для UI
+pandas==2.1.4
+plotly==5.17.0
