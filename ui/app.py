@@ -343,8 +343,18 @@ def show_history_page():
                 events_df = events_df[events_df['is_match'] == True]
             
             if not events_df.empty:
+                # Переименовываем колонки для лучшего отображения
+                display_df = events_df.copy()
+                display_df = display_df.rename(columns={
+                    'ingest_ts': 'Дата анализа',
+                    'criterion_text': 'Критерий',
+                    'is_match': 'Совпадение',
+                    'confidence': 'Уверенность',
+                    'summary': 'Результат'
+                })
+                
                 st.dataframe(
-                    events_df[['ingest_ts', 'criterion_id', 'is_match', 'confidence', 'summary']],
+                    display_df[['Дата анализа', 'Критерий', 'Совпадение', 'Уверенность', 'Результат']],
                     use_container_width=True
                 )
             else:

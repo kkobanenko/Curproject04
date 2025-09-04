@@ -143,10 +143,11 @@ def analyze_text_task(text: str,
                 logger.info(f"Уверенность {result.confidence} ниже порога {criterion.threshold}")
             
             # Создаем событие
+            logger.info(f"source_date type: {type(source.source_date)}, value: {source.source_date}")
             event = Event(
                 source_hash=source_hash,
                 source_url=source_url,
-                source_date=source.source_date,
+                source_date=source.source_date,  # Уже datetime объект
                 criterion_id=criterion.id,
                 criterion_text=criterion.criterion_text,
                 is_match=is_match,
@@ -155,6 +156,7 @@ def analyze_text_task(text: str,
                 model_name=result.model_name,
                 latency_ms=result.latency_ms
             )
+            logger.info(f"event.source_date type: {type(event.source_date)}, value: {event.source_date}")
             
             # Сохраняем событие в ClickHouse
             if clickhouse_manager.insert_event(event):

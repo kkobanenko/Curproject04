@@ -75,21 +75,23 @@ class ClickHouseManager:
     
     def __init__(self):
         """Инициализация подключения к ClickHouse"""
+        # Извлекаем хост из URL (убираем http:// и порт)
+        host = settings.clickhouse_url.replace('http://', '').split(':')[0]
         self.client = Client(
-            host=settings.clickhouse_url.replace('http://', ''),
+            host=host,
             database=settings.clickhouse_database,
-            port=8123
+            port=9000  # Native protocol port
         )
     
     def get_events_by_source(self, source_hash: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Получение событий по источнику"""
         try:
-            result = self.client.execute("""
+            result = self.client.execute(f"""
                 SELECT * FROM events 
-                WHERE source_hash = %s 
+                WHERE source_hash = '{source_hash}' 
                 ORDER BY ingest_ts DESC 
-                LIMIT %s
-            """, (source_hash, limit))
+                LIMIT {limit}
+            """)
             
             # Преобразуем результат в список словарей
             columns = ['event_id', 'source_hash', 'source_url', 'source_date', 
@@ -105,11 +107,11 @@ class ClickHouseManager:
     def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Получение последних событий"""
         try:
-            result = self.client.execute("""
+            result = self.client.execute(f"""
                 SELECT * FROM events 
                 ORDER BY ingest_ts DESC 
-                LIMIT %s
-            """, (limit,))
+                LIMIT {limit}
+            """)
             
             columns = ['event_id', 'source_hash', 'source_url', 'source_date', 
                       'ingest_ts', 'criterion_id', 'criterion_text', 'is_match',
@@ -124,7 +126,7 @@ class ClickHouseManager:
     def get_criteria_stats(self, days: int = 30) -> List[Dict[str, Any]]:
         """Получение статистики по критериям"""
         try:
-            result = self.client.execute("""
+            result = self.client.execute(f"""
                 SELECT 
                     criterion_id,
                     count() as total_events,
@@ -132,10 +134,10 @@ class ClickHouseManager:
                     avg(confidence) as avg_confidence,
                     avg(latency_ms) as avg_latency_ms
                 FROM events 
-                WHERE ingest_ts >= now() - INTERVAL %s DAY
+                WHERE ingest_ts >= now() - INTERVAL {days} DAY
                 GROUP BY criterion_id
                 ORDER BY total_events DESC
-            """, (days,))
+            """)
             
             columns = ['criterion_id', 'total_events', 'matches', 
                       'avg_confidence', 'avg_latency_ms']
@@ -149,7 +151,7 @@ class ClickHouseManager:
     def get_daily_stats(self, days: int = 7) -> List[Dict[str, Any]]:
         """Получение ежедневной статистики"""
         try:
-            result = self.client.execute("""
+            result = self.client.execute(f"""
                 SELECT 
                     toDate(ingest_ts) as date,
                     count() as total_events,
@@ -157,10 +159,10 @@ class ClickHouseManager:
                     avg(confidence) as avg_confidence,
                     avg(latency_ms) as avg_latency_ms
                 FROM events 
-                WHERE ingest_ts >= now() - INTERVAL %s DAY
+                WHERE ingest_ts >= now() - INTERVAL {days} DAY
                 GROUP BY date
                 ORDER BY date DESC
-            """, (days,))
+            """)
             
             columns = ['date', 'total_events', 'matches', 
                       'avg_confidence', 'avg_latency_ms']
