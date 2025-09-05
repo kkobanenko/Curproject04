@@ -489,10 +489,98 @@ def show_history_page():
                     'summary': 'Результат'
                 })
                 
-                st.dataframe(
-                    display_df[['Дата анализа', 'Критерий', 'Совпадение', 'Уверенность', 'Результат']],
-                    use_container_width=True
-                )
+                # Отображаем таблицу с кнопками действий
+                st.subheader("📋 Последние события")
+                
+                # Заголовки таблицы
+                header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([2, 3, 1, 1, 1, 1, 1])
+                
+                with header_col1:
+                    st.write("**📅 Дата анализа**")
+                with header_col2:
+                    st.write("**📝 Критерий**")
+                with header_col3:
+                    st.write("**✅ Совпадение**")
+                with header_col4:
+                    st.write("**📊 Уверенность**")
+                with header_col5:
+                    st.write("**📄 Результат**")
+                with header_col6:
+                    st.write("**🔗 Перейти**")
+                with header_col7:
+                    st.write("**👁️ Просмотр**")
+                
+                st.divider()
+                
+                # Создаем таблицу с кнопками для каждой строки
+                for idx, row in display_df.iterrows():
+                    with st.container():
+                        col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 1, 1, 1, 1, 1])
+                        
+                        with col1:
+                            st.write(f"**{row['Дата анализа']}**")
+                        
+                        with col2:
+                            st.write(f"**{row['Критерий']}**")
+                        
+                        with col3:
+                            match_icon = "✅" if row['Совпадение'] else "❌"
+                            st.write(f"{match_icon}")
+                        
+                        with col4:
+                            st.write(f"{row['Уверенность']:.2f}")
+                        
+                        with col5:
+                            st.write(f"{row['Результат'][:50]}..." if len(str(row['Результат'])) > 50 else row['Результат'])
+                        
+                        with col6:
+                            # Кнопка "Перейти" - только если есть URL
+                            source_url = events_df.iloc[idx]['source_url']
+                            if source_url and source_url != '\\N':
+                                st.link_button("🔗 Перейти", source_url, help="Открыть исходный документ")
+                            else:
+                                st.write("—")
+                        
+                        with col7:
+                            # Кнопка "Просмотр" - показать текст в модальном окне
+                            source_hash = events_df.iloc[idx]['source_hash']
+                            if st.button("👁️ Просмотр", key=f"view_{idx}", help="Просмотр текста документа"):
+                                st.session_state[f'show_text_{idx}'] = True
+                        
+                        # Модальное окно для просмотра текста
+                        if st.session_state.get(f'show_text_{idx}', False):
+                            with st.expander(f"📄 Текст документа (строка {idx + 1})", expanded=True):
+                                try:
+                                    # Получаем текст источника по хешу
+                                    source_data = postgres_manager.get_source_by_hash(source_hash)
+                                    if source_data and source_data.get('text'):
+                                        st.text_area(
+                                            "Текст документа:",
+                                            value=source_data['text'],
+                                            height=300,
+                                            disabled=True
+                                        )
+                                        
+                                        # Дополнительная информация
+                                        col_info1, col_info2 = st.columns(2)
+                                        with col_info1:
+                                            if source_data.get('url'):
+                                                st.write(f"**URL:** {source_data['url']}")
+                                        with col_info2:
+                                            if source_data.get('date'):
+                                                st.write(f"**Дата:** {source_data['date']}")
+                                    else:
+                                        st.warning("📄 Текст документа недоступен")
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Ошибка загрузки текста: {e}")
+                                
+                                # Кнопка закрытия
+                                if st.button("❌ Закрыть", key=f"close_{idx}"):
+                                    st.session_state[f'show_text_{idx}'] = False
+                                    st.rerun()
+                        
+                        st.divider()
             else:
                 st.info("📊 Нет событий для отображения")
         
