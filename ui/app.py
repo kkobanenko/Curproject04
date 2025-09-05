@@ -168,6 +168,9 @@ def show_text_analysis_page():
             
         elif status == 'queued':
             st.warning("⏳ Задача в очереди...")
+            # Показываем промежуточные результаты если они есть
+            if progress_data.get('status') != 'not_found':
+                show_job_progress(progress_data)
             
         else:
             st.info(f"📋 Статус: {status}")
