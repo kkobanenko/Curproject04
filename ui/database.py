@@ -68,6 +68,89 @@ class PostgresManager:
                 cur.execute("SELECT * FROM criteria WHERE is_active = TRUE ORDER BY id")
                 results = cur.fetchall()
                 return [dict(row) for row in results]
+    
+    def create_criterion(self, criterion: Criterion) -> Dict[str, Any]:
+        """Создание нового критерия"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("""
+                    INSERT INTO criteria (id, criterion_text, criteria_version, is_active, threshold, created_at, updated_at)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING *
+                """, (
+                    criterion.id,
+                    criterion.criterion_text,
+                    criterion.criteria_version,
+                    criterion.is_active,
+                    criterion.threshold,
+                    criterion.created_at,
+                    criterion.updated_at
+                ))
+                result = cur.fetchone()
+                conn.commit()
+                return dict(result)
+    
+    def update_criterion(self, criterion_id: str, criterion_text: str = None, 
+                        is_active: bool = None, threshold: float = None) -> Dict[str, Any]:
+        """Обновление критерия"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                # Формируем динамический запрос
+                updates = []
+                params = []
+                
+                if criterion_text is not None:
+                    updates.append("criterion_text = %s")
+                    params.append(criterion_text)
+                
+                if is_active is not None:
+                    updates.append("is_active = %s")
+                    params.append(is_active)
+                
+                if threshold is not None:
+                    updates.append("threshold = %s")
+                    params.append(threshold)
+                
+                if not updates:
+                    # Если нет изменений, просто возвращаем текущий критерий
+                    cur.execute("SELECT * FROM criteria WHERE id = %s", (criterion_id,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+                
+                # Добавляем обновление времени
+                updates.append("updated_at = %s")
+                params.append(datetime.utcnow())
+                
+                # Добавляем ID критерия
+                params.append(criterion_id)
+                
+                query = f"""
+                    UPDATE criteria 
+                    SET {', '.join(updates)}
+                    WHERE id = %s
+                    RETURNING *
+                """
+                
+                cur.execute(query, params)
+                result = cur.fetchone()
+                conn.commit()
+                return dict(result) if result else None
+    
+    def delete_criterion(self, criterion_id: str) -> bool:
+        """Удаление критерия"""
+        with self.get_connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM criteria WHERE id = %s", (criterion_id,))
+                conn.commit()
+                return cur.rowcount > 0
+    
+    def get_criterion_by_id(self, criterion_id: str) -> Optional[Dict[str, Any]]:
+        """Получение критерия по ID"""
+        with self.get_connection() as conn:
+            with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                cur.execute("SELECT * FROM criteria WHERE id = %s", (criterion_id,))
+                result = cur.fetchone()
+                return dict(result) if result else None
 
 
 class ClickHouseManager:

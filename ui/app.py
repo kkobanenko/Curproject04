@@ -507,7 +507,20 @@ def show_settings_page():
     """Страница настроек"""
     st.header("⚙️ Настройки")
     
-    # Статус сервисов
+    # Подзакладки в настройках
+    settings_tab = st.selectbox(
+        "Выберите раздел настроек:",
+        ["🔧 Статус сервисов", "📋 Управление критериями"]
+    )
+    
+    if settings_tab == "🔧 Статус сервисов":
+        show_services_status()
+    elif settings_tab == "📋 Управление критериями":
+        show_criteria_management()
+
+
+def show_services_status():
+    """Отображение статуса сервисов"""
     st.subheader("🔧 Статус сервисов")
     
     col1, col2 = st.columns(2)
@@ -556,6 +569,235 @@ def show_settings_page():
                 st.info(f"Рабочих процессов: {queue_info.get('workers', 0)}")
             else:
                 st.error(f"❌ Ошибка: {queue_info.get('reason', 'Неизвестная ошибка')}")
+
+
+def show_criteria_management():
+    """Отображение управления критериями"""
+    st.subheader("📋 Управление критериями")
+    
+    # Получаем список всех критериев
+    try:
+        criteria = postgres_manager.get_criteria()
+        
+        if not criteria:
+            st.info("📝 Критерии не найдены. Добавьте первый критерий.")
+        else:
+            # Отображаем таблицу критериев
+            st.subheader("📊 Список критериев")
+            
+            # Создаем DataFrame для отображения
+            criteria_df = pd.DataFrame(criteria)
+            
+            # Переименовываем колонки для лучшего отображения
+            display_df = criteria_df.copy()
+            display_df = display_df.rename(columns={
+                'id': 'ID',
+                'criterion_text': 'Текст критерия',
+                'criteria_version': 'Версия',
+                'is_active': 'Активен',
+                'threshold': 'Порог уверенности',
+                'created_at': 'Создан',
+                'updated_at': 'Обновлен'
+            })
+            
+            # Отображаем таблицу
+            st.dataframe(
+                display_df[['ID', 'Текст критерия', 'Активен', 'Порог уверенности', 'Создан']],
+                use_container_width=True
+            )
+            
+            # Кнопки управления
+            st.subheader("🔧 Действия с критериями")
+            
+            col1, col2, col3 = st.columns(3)
+            
+            with col1:
+                if st.button("🔄 Обновить список"):
+                    st.rerun()
+            
+            with col2:
+                if st.button("➕ Добавить критерий"):
+                    st.session_state['show_add_criterion'] = True
+            
+            with col3:
+                if st.button("✏️ Редактировать критерий"):
+                    st.session_state['show_edit_criterion'] = True
+        
+        # Форма добавления критерия
+        if st.session_state.get('show_add_criterion', False):
+            st.subheader("➕ Добавить новый критерий")
+            
+            with st.form("add_criterion_form"):
+                criterion_id = st.text_input(
+                    "ID критерия:",
+                    placeholder="например: molecules_pretrial_v2",
+                    help="Уникальный идентификатор критерия"
+                )
+                
+                criterion_text = st.text_area(
+                    "Текст критерия:",
+                    height=150,
+                    placeholder="Введите текст критерия на русском языке...",
+                    help="Описание критерия для анализа текста"
+                )
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    is_active = st.checkbox("Активен", value=True)
+                
+                with col2:
+                    threshold = st.number_input(
+                        "Порог уверенности:",
+                        min_value=0.0,
+                        max_value=1.0,
+                        value=0.5,
+                        step=0.1,
+                        help="Минимальная уверенность для срабатывания критерия"
+                    )
+                
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    submitted = st.form_submit_button("💾 Сохранить")
+                
+                with col2:
+                    if st.form_submit_button("❌ Отмена"):
+                        st.session_state['show_add_criterion'] = False
+                        st.rerun()
+                
+                if submitted:
+                    if criterion_id and criterion_text:
+                        try:
+                            from models import Criterion
+                            from datetime import datetime
+                            
+                            # Создаем объект критерия
+                            new_criterion = Criterion(
+                                id=criterion_id,
+                                criterion_text=criterion_text,
+                                is_active=is_active,
+                                threshold=threshold
+                            )
+                            
+                            # Сохраняем в базу данных
+                            result = postgres_manager.create_criterion(new_criterion)
+                            
+                            if result:
+                                st.success(f"✅ Критерий '{criterion_id}' успешно добавлен!")
+                                st.session_state['show_add_criterion'] = False
+                                st.rerun()
+                            else:
+                                st.error("❌ Ошибка при добавлении критерия")
+                                
+                        except Exception as e:
+                            st.error(f"❌ Ошибка: {e}")
+                    else:
+                        st.error("❌ Заполните все обязательные поля")
+        
+        # Форма редактирования критерия
+        if st.session_state.get('show_edit_criterion', False):
+            st.subheader("✏️ Редактировать критерий")
+            
+            # Выбор критерия для редактирования
+            if criteria:
+                criterion_options = {f"{c['id']} - {c['criterion_text'][:50]}...": c['id'] 
+                                   for c in criteria}
+                
+                selected_criterion = st.selectbox(
+                    "Выберите критерий для редактирования:",
+                    options=list(criterion_options.keys())
+                )
+                
+                if selected_criterion:
+                    criterion_id = criterion_options[selected_criterion]
+                    criterion_data = postgres_manager.get_criterion_by_id(criterion_id)
+                    
+                    if criterion_data:
+                        with st.form("edit_criterion_form"):
+                            st.write(f"**ID:** {criterion_data['id']}")
+                            
+                            new_criterion_text = st.text_area(
+                                "Текст критерия:",
+                                value=criterion_data['criterion_text'],
+                                height=150
+                            )
+                            
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                new_is_active = st.checkbox(
+                                    "Активен",
+                                    value=criterion_data['is_active']
+                                )
+                            
+                            with col2:
+                                new_threshold = st.number_input(
+                                    "Порог уверенности:",
+                                    min_value=0.0,
+                                    max_value=1.0,
+                                    value=criterion_data['threshold'] or 0.5,
+                                    step=0.1
+                                )
+                            
+                            col1, col2, col3 = st.columns(3)
+                            
+                            with col1:
+                                update_submitted = st.form_submit_button("💾 Обновить")
+                            
+                            with col2:
+                                delete_submitted = st.form_submit_button("🗑️ Удалить")
+                            
+                            with col3:
+                                if st.form_submit_button("❌ Отмена"):
+                                    st.session_state['show_edit_criterion'] = False
+                                    st.rerun()
+                            
+                            if update_submitted:
+                                try:
+                                    result = postgres_manager.update_criterion(
+                                        criterion_id=criterion_id,
+                                        criterion_text=new_criterion_text,
+                                        is_active=new_is_active,
+                                        threshold=new_threshold
+                                    )
+                                    
+                                    if result:
+                                        st.success(f"✅ Критерий '{criterion_id}' успешно обновлен!")
+                                        st.session_state['show_edit_criterion'] = False
+                                        st.rerun()
+                                    else:
+                                        st.error("❌ Ошибка при обновлении критерия")
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Ошибка: {e}")
+                            
+                            if delete_submitted:
+                                try:
+                                    # Подтверждение удаления
+                                    if st.checkbox("Подтвердить удаление", key="confirm_delete"):
+                                        result = postgres_manager.delete_criterion(criterion_id)
+                                        
+                                        if result:
+                                            st.success(f"✅ Критерий '{criterion_id}' успешно удален!")
+                                            st.session_state['show_edit_criterion'] = False
+                                            st.rerun()
+                                        else:
+                                            st.error("❌ Ошибка при удалении критерия")
+                                    else:
+                                        st.warning("⚠️ Подтвердите удаление, установив галочку")
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Ошибка: {e}")
+            else:
+                st.info("📝 Нет критериев для редактирования")
+                if st.button("❌ Отмена"):
+                    st.session_state['show_edit_criterion'] = False
+                    st.rerun()
+    
+    except Exception as e:
+        st.error(f"❌ Ошибка загрузки критериев: {e}")
+        st.exception(e)
 
 
 if __name__ == "__main__":
