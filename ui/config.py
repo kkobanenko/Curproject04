@@ -17,8 +17,8 @@ class Settings(BaseSettings):
     postgres_url: str = "postgresql://postgres:postgres@localhost:5432/pharma_analysis"
     
     # ClickHouse настройки
-    clickhouse_url: str = "http://localhost:8123"
-    clickhouse_database: str = "pharma_analysis"
+    clickhouse_url: str = "http://ch:8123"
+    clickhouse_database: str = "default"
     
     # Worker настройки
     worker_url: str = "http://localhost:8000"

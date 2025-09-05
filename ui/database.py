@@ -75,30 +75,49 @@ class ClickHouseManager:
     
     def __init__(self):
         """Инициализация подключения к ClickHouse"""
-        # Извлекаем хост из URL (убираем http:// и порт)
-        host = settings.clickhouse_url.replace('http://', '').split(':')[0]
-        self.client = Client(
-            host=host,
-            database=settings.clickhouse_database,
-            port=9000  # Native protocol port
-        )
+        import requests
+        self.base_url = settings.clickhouse_url
+        self.database = settings.clickhouse_database
+        self.session = requests.Session()
     
     def get_events_by_source(self, source_hash: str, limit: int = 100) -> List[Dict[str, Any]]:
         """Получение событий по источнику"""
         try:
-            result = self.client.execute(f"""
+            query = f"""
                 SELECT * FROM events 
                 WHERE source_hash = '{source_hash}' 
                 ORDER BY ingest_ts DESC 
                 LIMIT {limit}
-            """)
+            """
             
-            # Преобразуем результат в список словарей
-            columns = ['event_id', 'source_hash', 'source_url', 'source_date', 
-                      'ingest_ts', 'criterion_id', 'criterion_text', 'is_match',
-                      'confidence', 'summary', 'model_name', 'latency_ms', 'created_at']
+            response = self.session.get(
+                f"{self.base_url}/",
+                params={
+                    'query': query,
+                    'database': self.database,
+                    'format': 'JSONEachRow'
+                }
+            )
+            response.raise_for_status()
             
-            return [dict(zip(columns, row)) for row in result]
+            # Парсим JSON ответ
+            import json
+            lines = response.text.strip().split('\n')
+            events = []
+            
+            for line in lines:
+                if line.strip():
+                    event = json.loads(line)
+                    # Преобразуем типы данных
+                    if event.get('is_match') is not None:
+                        event['is_match'] = int(event['is_match'])
+                    if event.get('confidence') is not None:
+                        event['confidence'] = float(event['confidence'])
+                    if event.get('latency_ms') is not None:
+                        event['latency_ms'] = int(event['latency_ms'])
+                    events.append(event)
+            
+            return events
             
         except Exception as e:
             logger.error(f"Ошибка получения событий: {e}")
@@ -107,27 +126,52 @@ class ClickHouseManager:
     def get_recent_events(self, limit: int = 50) -> List[Dict[str, Any]]:
         """Получение последних событий"""
         try:
-            result = self.client.execute(f"""
+            query = f"""
                 SELECT * FROM events 
                 ORDER BY ingest_ts DESC 
                 LIMIT {limit}
-            """)
+            """
             
-            columns = ['event_id', 'source_hash', 'source_url', 'source_date', 
+            response = self.session.get(
+                f"{self.base_url}/",
+                params={
+                    'query': query,
+                    'database': self.database
+                }
+            )
+            response.raise_for_status()
+            
+            # Парсим TSV ответ
+            lines = response.text.strip().split('\n')
+            if not lines:
+                return []
+            
+            # Первая строка - заголовки
+            headers = ['event_id', 'source_hash', 'source_url', 'source_date', 
                       'ingest_ts', 'criterion_id', 'criterion_text', 'is_match',
                       'confidence', 'summary', 'model_name', 'latency_ms', 'created_at']
-            
             events = []
-            for row in result:
-                event = dict(zip(columns, row))
-                # Преобразуем типы данных
-                if event['is_match'] is not None:
-                    event['is_match'] = int(event['is_match'])
-                if event['confidence'] is not None:
-                    event['confidence'] = float(event['confidence'])
-                if event['latency_ms'] is not None:
-                    event['latency_ms'] = int(event['latency_ms'])
-                events.append(event)
+            
+            for line in lines:
+                if line.strip():
+                    values = line.split('\t')
+                    if len(values) >= len(headers):
+                        event = dict(zip(headers, values))
+                        
+                        # Преобразуем типы данных
+                        if event.get('is_match') is not None and event['is_match'] != '\\N':
+                            event['is_match'] = int(event['is_match'])
+                        if event.get('confidence') is not None and event['confidence'] != '\\N':
+                            event['confidence'] = float(event['confidence'])
+                        if event.get('latency_ms') is not None and event['latency_ms'] != '\\N':
+                            event['latency_ms'] = int(event['latency_ms'])
+                        
+                        # Заменяем \N на None
+                        for key, value in event.items():
+                            if value == '\\N':
+                                event[key] = None
+                        
+                        events.append(event)
             
             return events
             
@@ -138,7 +182,7 @@ class ClickHouseManager:
     def get_criteria_stats(self, days: int = 30) -> List[Dict[str, Any]]:
         """Получение статистики по критериям"""
         try:
-            result = self.client.execute(f"""
+            query = f"""
                 SELECT 
                     criterion_id,
                     count() as total_events,
@@ -149,12 +193,38 @@ class ClickHouseManager:
                 WHERE ingest_ts >= now() - INTERVAL {days} DAY
                 GROUP BY criterion_id
                 ORDER BY total_events DESC
-            """)
+            """
             
-            columns = ['criterion_id', 'total_events', 'matches', 
-                      'avg_confidence', 'avg_latency_ms']
+            response = self.session.get(
+                f"{self.base_url}/",
+                params={
+                    'query': query,
+                    'database': self.database,
+                    'format': 'JSONEachRow'
+                }
+            )
+            response.raise_for_status()
             
-            return [dict(zip(columns, row)) for row in result]
+            # Парсим JSON ответ
+            import json
+            lines = response.text.strip().split('\n')
+            stats = []
+            
+            for line in lines:
+                if line.strip():
+                    stat = json.loads(line)
+                    # Преобразуем типы данных
+                    if stat.get('total_events') is not None:
+                        stat['total_events'] = int(stat['total_events'])
+                    if stat.get('matches') is not None:
+                        stat['matches'] = int(stat['matches'])
+                    if stat.get('avg_confidence') is not None:
+                        stat['avg_confidence'] = float(stat['avg_confidence'])
+                    if stat.get('avg_latency_ms') is not None:
+                        stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
+                    stats.append(stat)
+            
+            return stats
             
         except Exception as e:
             logger.error(f"Ошибка получения статистики: {e}")
@@ -163,7 +233,7 @@ class ClickHouseManager:
     def get_daily_stats(self, days: int = 7) -> List[Dict[str, Any]]:
         """Получение ежедневной статистики"""
         try:
-            result = self.client.execute(f"""
+            query = f"""
                 SELECT 
                     toDate(ingest_ts) as date,
                     count() as total_events,
@@ -174,12 +244,38 @@ class ClickHouseManager:
                 WHERE ingest_ts >= now() - INTERVAL {days} DAY
                 GROUP BY date
                 ORDER BY date DESC
-            """)
+            """
             
-            columns = ['date', 'total_events', 'matches', 
-                      'avg_confidence', 'avg_latency_ms']
+            response = self.session.get(
+                f"{self.base_url}/",
+                params={
+                    'query': query,
+                    'database': self.database,
+                    'format': 'JSONEachRow'
+                }
+            )
+            response.raise_for_status()
             
-            return [dict(zip(columns, row)) for row in result]
+            # Парсим JSON ответ
+            import json
+            lines = response.text.strip().split('\n')
+            stats = []
+            
+            for line in lines:
+                if line.strip():
+                    stat = json.loads(line)
+                    # Преобразуем типы данных
+                    if stat.get('total_events') is not None:
+                        stat['total_events'] = int(stat['total_events'])
+                    if stat.get('matches') is not None:
+                        stat['matches'] = int(stat['matches'])
+                    if stat.get('avg_confidence') is not None:
+                        stat['avg_confidence'] = float(stat['avg_confidence'])
+                    if stat.get('avg_latency_ms') is not None:
+                        stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
+                    stats.append(stat)
+            
+            return stats
             
         except Exception as e:
             logger.error(f"Ошибка получения ежедневной статистики: {e}")
