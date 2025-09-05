@@ -23,6 +23,7 @@ class Source:
     source_hash: str = ""
     source_url: Optional[str] = None
     source_date: Optional[datetime] = None
+    text: Optional[str] = None  # Первый килобайт текста для просмотра
     ingest_ts: Optional[datetime] = None
     force_recheck: bool = False
     created_at: Optional[datetime] = None
@@ -46,6 +47,7 @@ class Source:
             'source_hash': self.source_hash,
             'source_url': self.source_url,
             'source_date': self.source_date,
+            'text': self.text,
             'ingest_ts': self.ingest_ts,
             'force_recheck': self.force_recheck,
             'created_at': self.created_at,
@@ -60,6 +62,7 @@ class Source:
             source_hash=data['source_hash'],
             source_url=data.get('source_url'),
             source_date=data.get('source_date'),
+            text=data.get('text'),
             ingest_ts=data.get('ingest_ts'),
             force_recheck=data.get('force_recheck', False),
             created_at=data.get('created_at'),

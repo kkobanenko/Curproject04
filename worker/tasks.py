@@ -110,10 +110,14 @@ def analyze_text_task(text: str,
             }
         
         # Создаем или обновляем источник
+        # Сохраняем первый килобайт текста для возможности просмотра
+        text_preview = text[:1024] if text else None
+        
         source = Source(
             source_hash=source_hash,
             source_url=source_url,
             source_date=datetime.fromisoformat(source_date) if source_date else None,
+            text=text_preview,
             force_recheck=force_recheck
         )
         

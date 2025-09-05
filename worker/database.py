@@ -46,16 +46,17 @@ class PostgresManager:
         with self.get_connection() as conn:
             with conn.cursor(cursor_factory=RealDictCursor) as cur:
                 cur.execute("""
-                    INSERT INTO sources (id, source_hash, source_url, source_date, 
+                    INSERT INTO sources (id, source_hash, source_url, source_date, text,
                                        ingest_ts, force_recheck, created_at, updated_at)
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
                     ON CONFLICT (source_hash) DO UPDATE SET
                         updated_at = NOW(),
-                        force_recheck = EXCLUDED.force_recheck
+                        force_recheck = EXCLUDED.force_recheck,
+                        text = EXCLUDED.text
                     RETURNING *
                 """, (
                     str(source.id), source.source_hash, source.source_url,
-                    source.source_date, source.ingest_ts, source.force_recheck,
+                    source.source_date, source.text, source.ingest_ts, source.force_recheck,
                     source.created_at, source.updated_at
                 ))
                 result = cur.fetchone()
