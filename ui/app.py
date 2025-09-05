@@ -140,10 +140,13 @@ def show_text_analysis_page():
         
         # Автообновление статуса
         if st.button("🔄 Обновить статус"):
-            pass
+            st.rerun()
         
         # Получаем статус задачи
         job_status = queue_manager.get_job_status(st.session_state['current_job_id'])
+        
+        # Получаем промежуточные результаты
+        progress_data = queue_manager.get_job_progress(st.session_state['current_job_id'])
         
         # Отображаем статус
         status = job_status.get('status', 'unknown')
@@ -160,12 +163,69 @@ def show_text_analysis_page():
             
         elif status == 'started':
             st.info("🔄 Анализ выполняется...")
+            # Показываем промежуточные результаты
+            show_job_progress(progress_data)
             
         elif status == 'queued':
             st.warning("⏳ Задача в очереди...")
             
         else:
             st.info(f"📋 Статус: {status}")
+            # Показываем промежуточные результаты если они есть
+            if progress_data.get('status') != 'not_found':
+                show_job_progress(progress_data)
+
+
+def show_job_progress(progress_data):
+    """Отображение промежуточных результатов анализа"""
+    if not progress_data or progress_data.get('status') == 'not_found':
+        st.info("📊 Промежуточные результаты недоступны")
+        return
+    
+    st.subheader("🔄 Промежуточные результаты анализа")
+    
+    # Основная информация о прогрессе
+    col1, col2, col3 = st.columns(3)
+    
+    with col1:
+        st.metric("Прогресс", progress_data.get('progress', 'N/A'))
+    
+    with col2:
+        st.metric("Текущий критерий", progress_data.get('current_criterion', 'N/A'))
+    
+    with col3:
+        st.metric("Статус", progress_data.get('status', 'N/A'))
+    
+    # Текущий критерий
+    if 'criterion_text' in progress_data:
+        st.subheader("📝 Текущий критерий")
+        st.info(f"**{progress_data.get('current_criterion', 'N/A')}**: {progress_data['criterion_text']}")
+    
+    # Результат текущего анализа
+    if 'current_result' in progress_data:
+        result = progress_data['current_result']
+        st.subheader("🤖 Результат анализа Ollama")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            match_status = "✅ Совпадение" if result.get('is_match') else "❌ Не совпадает"
+            st.metric("Результат", match_status)
+        
+        with col2:
+            st.metric("Уверенность", f"{result.get('confidence', 0):.2f}")
+        
+        with col3:
+            st.metric("Время (мс)", result.get('latency_ms', 0))
+        
+        # Краткое описание
+        if 'summary' in result and result['summary']:
+            st.subheader("📄 Краткое описание")
+            st.info(result['summary'])
+        
+        # Информация о модели
+        if 'model_name' in result:
+            st.caption(f"Модель: {result['model_name']}")
 
 
 def show_job_results(result):

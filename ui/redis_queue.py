@@ -161,6 +161,56 @@ class QueueManager:
                 'reason': str(e),
                 'timestamp': datetime.utcnow().isoformat()
             }
+    
+    def get_job_progress(self, job_id: str) -> Dict[str, Any]:
+        """
+        Получение промежуточных результатов выполнения задачи
+        
+        Args:
+            job_id: ID задачи
+            
+        Returns:
+            Данные о прогрессе выполнения
+        """
+        try:
+            # Проверяем подключение к Redis
+            self.redis_conn.ping()
+            
+            # Получаем данные о прогрессе из Redis
+            key = f"job_progress:{job_id}"
+            progress_data = self.redis_conn.get(key)
+            
+            if progress_data is None:
+                return {
+                    'status': 'not_found',
+                    'job_id': job_id,
+                    'reason': 'no_progress_data',
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            
+            # Парсим JSON данные
+            try:
+                progress = json.loads(progress_data)
+                progress['job_id'] = job_id
+                progress['timestamp'] = datetime.utcnow().isoformat()
+                return progress
+            except json.JSONDecodeError as e:
+                logger.error(f"Ошибка парсинга данных прогресса: {e}")
+                return {
+                    'status': 'error',
+                    'job_id': job_id,
+                    'reason': 'invalid_progress_data',
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+            
+        except Exception as e:
+            logger.error(f"Ошибка получения прогресса задачи: {e}")
+            return {
+                'status': 'error',
+                'job_id': job_id,
+                'reason': str(e),
+                'timestamp': datetime.utcnow().isoformat()
+            }
 
 
 # Глобальный экземпляр менеджера очередей

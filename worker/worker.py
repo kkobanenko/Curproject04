@@ -18,6 +18,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from config import settings
 from tasks import analyze_text_task, health_check_task
+from custom_worker import CustomWorker
 
 # Настройка логирования
 if settings.log_format == "json":
@@ -116,11 +117,11 @@ def main():
     # Создаем очередь
     queue = Queue('text_analysis', connection=redis_conn)
     
-    # Создаем worker
-    worker = Worker(
+    # Создаем кастомный worker
+    worker = CustomWorker(
         [queue],
         connection=redis_conn,
-        name=f'pharma-worker-{os.getpid()}'
+        name=f'pharma-worker-{int(time.time())}'
     )
     
     logger.info(f"Worker {worker.name} запущен")

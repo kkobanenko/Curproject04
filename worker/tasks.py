@@ -6,6 +6,8 @@
 import hashlib
 import logging
 import unicodedata
+import json
+import redis
 from typing import Dict, Any, List
 from datetime import datetime
 
@@ -15,6 +17,26 @@ from models import Source, Event
 from api import OllamaClient
 
 logger = logging.getLogger(__name__)
+
+
+def save_progress_to_redis(job_id: str, progress_data: Dict[str, Any]) -> None:
+    """
+    Сохранение промежуточных результатов анализа в Redis
+    
+    Args:
+        job_id: ID задачи
+        progress_data: Данные о прогрессе
+    """
+    try:
+        redis_conn = redis.from_url(settings.redis_url)
+        key = f"job_progress:{job_id}"
+        
+        # Сохраняем данные с TTL 1 час
+        redis_conn.setex(key, 3600, json.dumps(progress_data, default=str))
+        logger.info(f"Прогресс задачи {job_id} сохранен в Redis")
+        
+    except Exception as e:
+        logger.error(f"Ошибка сохранения прогресса в Redis: {e}")
 
 
 def normalize_text(text: str) -> str:
@@ -53,7 +75,8 @@ def compute_hash(text: str) -> str:
 def analyze_text_task(text: str, 
                      source_url: str = None, 
                      source_date: str = None,
-                     force_recheck: bool = False) -> Dict[str, Any]:
+                     force_recheck: bool = False,
+                     job_id: str = None) -> Dict[str, Any]:
     """
     Основная задача анализа текста
     
@@ -62,6 +85,7 @@ def analyze_text_task(text: str,
         source_url: URL источника (опционально)
         source_date: Дата источника (опционально)
         force_recheck: Принудительная перепроверка
+        job_id: ID задачи для отслеживания прогресса
         
     Returns:
         Результат обработки
@@ -122,8 +146,23 @@ def analyze_text_task(text: str,
         
         # Анализируем текст по каждому критерию
         events = []
-        for criterion in criteria:
-            logger.info(f"Анализируем по критерию: {criterion.id}")
+        total_criteria = len(criteria)
+        
+        for i, criterion in enumerate(criteria):
+            logger.info(f"Анализируем по критерию: {criterion.id} ({i+1}/{total_criteria})")
+            
+            # Сохраняем начальный прогресс
+            if job_id:
+                progress_data = {
+                    'status': 'analyzing',
+                    'current_criterion': criterion.id,
+                    'criterion_text': criterion.criterion_text,
+                    'progress': f"{i+1}/{total_criteria}",
+                    'completed_criteria': i,
+                    'total_criteria': total_criteria,
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+                save_progress_to_redis(job_id, progress_data)
             
             # Выполняем анализ
             result = llm_client.analyze_text(
@@ -141,6 +180,27 @@ def analyze_text_task(text: str,
             if criterion.threshold and result.confidence < criterion.threshold:
                 is_match = False
                 logger.info(f"Уверенность {result.confidence} ниже порога {criterion.threshold}")
+            
+            # Сохраняем результат анализа
+            if job_id:
+                progress_data = {
+                    'status': 'analyzing',
+                    'current_criterion': criterion.id,
+                    'criterion_text': criterion.criterion_text,
+                    'progress': f"{i+1}/{total_criteria}",
+                    'completed_criteria': i,
+                    'total_criteria': total_criteria,
+                    'current_result': {
+                        'criterion_id': criterion.id,
+                        'is_match': is_match,
+                        'confidence': result.confidence,
+                        'summary': result.summary,
+                        'latency_ms': result.latency_ms,
+                        'model_name': result.model_name
+                    },
+                    'timestamp': datetime.utcnow().isoformat()
+                }
+                save_progress_to_redis(job_id, progress_data)
             
             # Создаем событие
             logger.info(f"source_date type: {type(source.source_date)}, value: {source.source_date}")
