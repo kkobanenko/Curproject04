@@ -11,17 +11,17 @@ class Settings(BaseSettings):
     """Настройки приложения"""
     
     # Redis настройки
-    redis_url: str = "redis://localhost:6379/0"
+    redis_url: str = "redis://redis:6379/0"
     
     # PostgreSQL настройки
-    postgres_url: str = "postgresql://postgres:postgres@localhost:5432/pharma_analysis"
+    postgres_url: str = "postgresql://postgres:postgres@pg:5432/pharma_analysis"
     
     # ClickHouse настройки
-    clickhouse_url: str = "http://localhost:8123"
-    clickhouse_database: str = "pharma_analysis"
+    clickhouse_url: str = "http://ch:8123"
+    clickhouse_database: str = "default"
     
     # Ollama настройки
-    ollama_url: str = "http://localhost:11434"
+    ollama_url: str = "http://llm:11434"
     ollama_model: str = "llama3:8b"
     num_ctx: int = 8192
     temperature: float = 0.7

@@ -105,7 +105,9 @@ services:
 
   # LLM сервис - Ollama
   llm:
-    image: ollama/ollama:latest
+    build:
+      context: ./llm
+      dockerfile: Dockerfile
     ports:
       - "11438:11434"
     environment:

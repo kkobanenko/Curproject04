@@ -1,23 +1,20 @@
 FROM ollama/ollama:latest
 
-# Устанавливаем дополнительные инструменты для health check
-RUN apt-get update && apt-get install -y \
-    curl \
-    wget \
-    && rm -rf /var/lib/apt/lists/*
+# Устанавливаем curl (bash уже есть в Ubuntu)
+RUN apt-get update && apt-get install -y curl && rm -rf /var/lib/apt/lists/*
 
-# Копируем конфигурацию модели
-COPY models/ /root/.ollama/models/
+# Копируем скрипт инициализации
+COPY init_models.sh /init_models.sh
+RUN chmod +x /init_models.sh
 
-# Устанавливаем рабочую директорию
-WORKDIR /app
+# Создаем entrypoint скрипт
+RUN echo '#!/bin/bash' > /entrypoint.sh && \
+    echo 'set -e' >> /entrypoint.sh && \
+    echo '/bin/ollama serve &' >> /entrypoint.sh && \
+    echo 'sleep 5' >> /entrypoint.sh && \
+    echo '/init_models.sh' >> /entrypoint.sh && \
+    echo 'wait' >> /entrypoint.sh && \
+    chmod +x /entrypoint.sh
 
-# Копируем скрипты инициализации
-COPY init.sh /app/
-RUN chmod +x /app/init.sh
-
-# Expose порт
-EXPOSE 11434
-
-# Запускаем Ollama
-CMD ["ollama", "serve"]
+# Используем entrypoint вместо CMD
+ENTRYPOINT ["/entrypoint.sh"]
