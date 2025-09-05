@@ -119,9 +119,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '4.0'
+          cpus: '8.0'
         reservations:
-          cpus: '2.0'
+          cpus: '4.0'
     healthcheck:
       test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/11434 && echo -e 'GET /api/tags HTTP/1.1\r\nHost: 127.0.0.1:11434\r\n\r\n' >&3 && timeout 5 cat <&3 | head -1 | grep -q '200 OK'"]
       interval: 30s

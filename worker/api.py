@@ -37,15 +37,16 @@ class OllamaClient:
         """
         self.base_url = base_url.rstrip('/')
         self.session = requests.Session()
-        self.session.timeout = 30
+        self.session.timeout = 120  # Увеличиваем таймаут до 2 минут
         
-    def _make_request(self, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
+    def _make_request(self, endpoint: str, data: Dict[str, Any] = None, method: str = "POST") -> Dict[str, Any]:
         """
         Выполнение запроса к Ollama API
         
         Args:
             endpoint: API endpoint
             data: Данные для запроса
+            method: HTTP метод (GET или POST)
             
         Returns:
             Ответ от API
@@ -53,7 +54,10 @@ class OllamaClient:
         url = f"{self.base_url}{endpoint}"
         
         try:
-            response = self.session.post(url, json=data)
+            if method.upper() == "GET":
+                response = self.session.get(url)
+            else:
+                response = self.session.post(url, json=data)
             response.raise_for_status()
             return response.json()
         except requests.exceptions.RequestException as e:
@@ -111,6 +115,7 @@ summary - краткое объяснение на русском языке"""
             "model": model,
             "prompt": f"{system_prompt}\n\n{user_prompt}",
             "stream": False,
+            "keep_alive": "5m",  # Держим модель в памяти 5 минут
             "options": {
                 "temperature": temperature,
                 "top_p": top_p,
@@ -188,7 +193,7 @@ summary - краткое объяснение на русском языке"""
             Список моделей
         """
         try:
-            response = self._make_request("/api/tags", {})
+            response = self._make_request("/api/tags", method="GET")
             return response.get("models", [])
         except Exception as e:
             logger.error(f"Ошибка получения моделей: {e}")
