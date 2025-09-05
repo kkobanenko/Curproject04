@@ -379,7 +379,7 @@ def show_history_page():
     col1, col2 = st.columns(2)
     
     with col1:
-        limit = st.selectbox("Количество записей:", [10, 25, 50, 100], index=2)
+        limit = st.selectbox("Количество записей:", [10, 25, 50, 100], index=3)
     
     with col2:
         if st.button("🔄 Обновить"):
@@ -403,7 +403,7 @@ def show_history_page():
             show_matches_only = st.checkbox("Только совпадения")
             
             if show_matches_only:
-                events_df = events_df[events_df['is_match'] == True]
+                events_df = events_df[events_df['is_match'] == 1]
             
             if not events_df.empty:
                 # Переименовываем колонки для лучшего отображения

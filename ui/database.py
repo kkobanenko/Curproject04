@@ -117,7 +117,19 @@ class ClickHouseManager:
                       'ingest_ts', 'criterion_id', 'criterion_text', 'is_match',
                       'confidence', 'summary', 'model_name', 'latency_ms', 'created_at']
             
-            return [dict(zip(columns, row)) for row in result]
+            events = []
+            for row in result:
+                event = dict(zip(columns, row))
+                # Преобразуем типы данных
+                if event['is_match'] is not None:
+                    event['is_match'] = int(event['is_match'])
+                if event['confidence'] is not None:
+                    event['confidence'] = float(event['confidence'])
+                if event['latency_ms'] is not None:
+                    event['latency_ms'] = int(event['latency_ms'])
+                events.append(event)
+            
+            return events
             
         except Exception as e:
             logger.error(f"Ошибка получения последних событий: {e}")
