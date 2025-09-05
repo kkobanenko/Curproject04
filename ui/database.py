@@ -199,30 +199,42 @@ class ClickHouseManager:
                 f"{self.base_url}/",
                 params={
                     'query': query,
-                    'database': self.database,
-                    'format': 'JSONEachRow'
+                    'database': self.database
                 }
             )
             response.raise_for_status()
             
-            # Парсим JSON ответ
-            import json
+            # Парсим TSV ответ
             lines = response.text.strip().split('\n')
+            if not lines:
+                return []
+            
+            # Заголовки для статистики
+            headers = ['criterion_id', 'total_events', 'matches', 'avg_confidence', 'avg_latency_ms']
             stats = []
             
             for line in lines:
                 if line.strip():
-                    stat = json.loads(line)
-                    # Преобразуем типы данных
-                    if stat.get('total_events') is not None:
-                        stat['total_events'] = int(stat['total_events'])
-                    if stat.get('matches') is not None:
-                        stat['matches'] = int(stat['matches'])
-                    if stat.get('avg_confidence') is not None:
-                        stat['avg_confidence'] = float(stat['avg_confidence'])
-                    if stat.get('avg_latency_ms') is not None:
-                        stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
-                    stats.append(stat)
+                    values = line.split('\t')
+                    if len(values) >= len(headers):
+                        stat = dict(zip(headers, values))
+                        
+                        # Преобразуем типы данных
+                        if stat.get('total_events') is not None and stat['total_events'] != '\\N':
+                            stat['total_events'] = int(stat['total_events'])
+                        if stat.get('matches') is not None and stat['matches'] != '\\N':
+                            stat['matches'] = int(stat['matches'])
+                        if stat.get('avg_confidence') is not None and stat['avg_confidence'] != '\\N':
+                            stat['avg_confidence'] = float(stat['avg_confidence'])
+                        if stat.get('avg_latency_ms') is not None and stat['avg_latency_ms'] != '\\N':
+                            stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
+                        
+                        # Заменяем \N на None
+                        for key, value in stat.items():
+                            if value == '\\N':
+                                stat[key] = None
+                        
+                        stats.append(stat)
             
             return stats
             
@@ -250,30 +262,42 @@ class ClickHouseManager:
                 f"{self.base_url}/",
                 params={
                     'query': query,
-                    'database': self.database,
-                    'format': 'JSONEachRow'
+                    'database': self.database
                 }
             )
             response.raise_for_status()
             
-            # Парсим JSON ответ
-            import json
+            # Парсим TSV ответ
             lines = response.text.strip().split('\n')
+            if not lines:
+                return []
+            
+            # Заголовки для ежедневной статистики
+            headers = ['date', 'total_events', 'matches', 'avg_confidence', 'avg_latency_ms']
             stats = []
             
             for line in lines:
                 if line.strip():
-                    stat = json.loads(line)
-                    # Преобразуем типы данных
-                    if stat.get('total_events') is not None:
-                        stat['total_events'] = int(stat['total_events'])
-                    if stat.get('matches') is not None:
-                        stat['matches'] = int(stat['matches'])
-                    if stat.get('avg_confidence') is not None:
-                        stat['avg_confidence'] = float(stat['avg_confidence'])
-                    if stat.get('avg_latency_ms') is not None:
-                        stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
-                    stats.append(stat)
+                    values = line.split('\t')
+                    if len(values) >= len(headers):
+                        stat = dict(zip(headers, values))
+                        
+                        # Преобразуем типы данных
+                        if stat.get('total_events') is not None and stat['total_events'] != '\\N':
+                            stat['total_events'] = int(stat['total_events'])
+                        if stat.get('matches') is not None and stat['matches'] != '\\N':
+                            stat['matches'] = int(stat['matches'])
+                        if stat.get('avg_confidence') is not None and stat['avg_confidence'] != '\\N':
+                            stat['avg_confidence'] = float(stat['avg_confidence'])
+                        if stat.get('avg_latency_ms') is not None and stat['avg_latency_ms'] != '\\N':
+                            stat['avg_latency_ms'] = float(stat['avg_latency_ms'])
+                        
+                        # Заменяем \N на None
+                        for key, value in stat.items():
+                            if value == '\\N':
+                                stat[key] = None
+                        
+                        stats.append(stat)
             
             return stats
             

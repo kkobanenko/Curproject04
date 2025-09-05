@@ -293,15 +293,15 @@ def show_statistics_page():
         if st.button("🔄 Обновить статистику"):
             st.rerun()
     
-    # Основные метрики
-    st.subheader("📊 Основные показатели")
-    
     try:
         # Статистика по критериям
         criteria_stats = clickhouse_manager.get_criteria_stats(days)
         
         if criteria_stats:
             stats_df = pd.DataFrame(criteria_stats)
+            
+            # Основные метрики
+            st.subheader("📊 Основные показатели")
             
             col1, col2, col3, col4 = st.columns(4)
             
@@ -311,7 +311,8 @@ def show_statistics_page():
             
             with col2:
                 total_matches = stats_df['matches'].sum()
-                st.metric("Всего совпадений", total_matches)
+                match_rate = (total_matches / total_events * 100) if total_events > 0 else 0
+                st.metric("Всего совпадений", f"{total_matches} ({match_rate:.1f}%)")
             
             with col3:
                 avg_confidence = stats_df['avg_confidence'].mean()
@@ -321,7 +322,29 @@ def show_statistics_page():
                 avg_latency = stats_df['avg_latency_ms'].mean()
                 st.metric("Среднее время (мс)", f"{avg_latency:.0f}")
             
+            # Детальная статистика по критериям
+            st.subheader("📋 Статистика по критериям")
+            
+            # Создаем таблицу с детальной статистикой
+            display_df = stats_df.copy()
+            display_df['match_rate'] = (display_df['matches'] / display_df['total_events'] * 100).round(1)
+            display_df = display_df.rename(columns={
+                'criterion_id': 'Критерий',
+                'total_events': 'Всего событий',
+                'matches': 'Совпадения',
+                'match_rate': 'Процент совпадений (%)',
+                'avg_confidence': 'Средняя уверенность',
+                'avg_latency_ms': 'Среднее время (мс)'
+            })
+            
+            st.dataframe(
+                display_df[['Критерий', 'Всего событий', 'Совпадения', 'Процент совпадений (%)', 
+                           'Средняя уверенность', 'Среднее время (мс)']],
+                use_container_width=True
+            )
+            
             # Графики
+            st.subheader("📊 Графики")
             col1, col2 = st.columns(2)
             
             with col1:
@@ -331,8 +354,11 @@ def show_statistics_page():
                     x='criterion_id',
                     y='total_events',
                     title="События по критериям",
-                    labels={'criterion_id': 'Критерий', 'total_events': 'Количество событий'}
+                    labels={'criterion_id': 'Критерий', 'total_events': 'Количество событий'},
+                    color='total_events',
+                    color_continuous_scale='Blues'
                 )
+                fig1.update_layout(xaxis_tickangle=-45)
                 st.plotly_chart(fig1, use_container_width=True)
             
             with col2:
@@ -342,9 +368,25 @@ def show_statistics_page():
                     x='criterion_id',
                     y='matches',
                     title="Совпадения по критериям",
-                    labels={'criterion_id': 'Критерий', 'matches': 'Количество совпадений'}
+                    labels={'criterion_id': 'Критерий', 'matches': 'Количество совпадений'},
+                    color='matches',
+                    color_continuous_scale='Greens'
                 )
+                fig2.update_layout(xaxis_tickangle=-45)
                 st.plotly_chart(fig2, use_container_width=True)
+            
+            # График процента совпадений
+            fig3 = px.bar(
+                stats_df,
+                x='criterion_id',
+                y=stats_df['matches'] / stats_df['total_events'] * 100,
+                title="Процент совпадений по критериям",
+                labels={'criterion_id': 'Критерий', 'y': 'Процент совпадений (%)'},
+                color=stats_df['matches'] / stats_df['total_events'] * 100,
+                color_continuous_scale='Viridis'
+            )
+            fig3.update_layout(xaxis_tickangle=-45)
+            st.plotly_chart(fig3, use_container_width=True)
             
             # Ежедневная статистика
             daily_stats = clickhouse_manager.get_daily_stats(days)
@@ -355,20 +397,51 @@ def show_statistics_page():
                 
                 st.subheader("📅 Ежедневная статистика")
                 
-                fig3 = px.line(
+                # Метрики по дням
+                col1, col2, col3 = st.columns(3)
+                
+                with col1:
+                    avg_daily_events = daily_df['total_events'].mean()
+                    st.metric("Среднее событий в день", f"{avg_daily_events:.1f}")
+                
+                with col2:
+                    avg_daily_matches = daily_df['matches'].mean()
+                    st.metric("Среднее совпадений в день", f"{avg_daily_matches:.1f}")
+                
+                with col3:
+                    avg_daily_confidence = daily_df['avg_confidence'].mean()
+                    st.metric("Средняя уверенность", f"{avg_daily_confidence:.2f}")
+                
+                # График ежедневной статистики
+                fig4 = px.line(
                     daily_df,
                     x='date',
                     y=['total_events', 'matches'],
                     title="События и совпадения по дням",
-                    labels={'date': 'Дата', 'value': 'Количество', 'variable': 'Тип'}
+                    labels={'date': 'Дата', 'value': 'Количество', 'variable': 'Тип'},
+                    markers=True
                 )
-                st.plotly_chart(fig3, use_container_width=True)
+                fig4.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig4, use_container_width=True)
+                
+                # График уверенности по дням
+                fig5 = px.line(
+                    daily_df,
+                    x='date',
+                    y='avg_confidence',
+                    title="Средняя уверенность по дням",
+                    labels={'date': 'Дата', 'avg_confidence': 'Уверенность'},
+                    markers=True
+                )
+                fig5.update_layout(xaxis_tickangle=-45)
+                st.plotly_chart(fig5, use_container_width=True)
         
         else:
             st.info("📊 Нет данных для отображения")
     
     except Exception as e:
         st.error(f"❌ Ошибка загрузки статистики: {e}")
+        st.exception(e)
 
 
 def show_history_page():
