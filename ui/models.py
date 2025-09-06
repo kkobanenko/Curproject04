@@ -23,6 +23,7 @@ class Source:
     source_hash: str = ""
     source_url: Optional[str] = None
     source_date: Optional[datetime] = None
+    text: Optional[str] = None  # Первый килобайт текста для просмотра
     ingest_ts: Optional[datetime] = None
     force_recheck: bool = False
     created_at: Optional[datetime] = None
@@ -46,6 +47,7 @@ class Source:
             'source_hash': self.source_hash,
             'source_url': self.source_url,
             'source_date': self.source_date,
+            'text': self.text,
             'ingest_ts': self.ingest_ts,
             'force_recheck': self.force_recheck,
             'created_at': self.created_at,
@@ -60,6 +62,7 @@ class Source:
             source_hash=data['source_hash'],
             source_url=data.get('source_url'),
             source_date=data.get('source_date'),
+            text=data.get('text'),
             ingest_ts=data.get('ingest_ts'),
             force_recheck=data.get('force_recheck', False),
             created_at=data.get('created_at'),
@@ -205,3 +208,55 @@ class SourceStats:
     def match_rate(self) -> float:
         """Процент совпадений"""
         return (self.matches / self.total_events * 100) if self.total_events > 0 else 0.0
+
+
+@dataclass
+class News:
+    """Модель новости для медицинской тематики"""
+    id: Optional[uuid.UUID] = None
+    title: str = ""
+    url: Optional[str] = None
+    content: Optional[str] = None  # Первый килобайт текста для просмотра
+    source: str = ""  # Источник новости (pubmed, web_search, etc.)
+    search_query: str = ""  # Запрос, по которому была найдена новость
+    published_date: Optional[datetime] = None  # Дата публикации новости
+    created_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
+    
+    def __post_init__(self):
+        """Инициализация после создания объекта"""
+        if self.id is None:
+            self.id = uuid.uuid4()
+        if self.created_at is None:
+            self.created_at = datetime.utcnow()
+        if self.updated_at is None:
+            self.updated_at = datetime.utcnow()
+    
+    def to_dict(self) -> Dict[str, Any]:
+        """Преобразование в словарь для сохранения в БД"""
+        return {
+            'id': str(self.id),
+            'title': self.title,
+            'url': self.url,
+            'content': self.content,
+            'source': self.source,
+            'search_query': self.search_query,
+            'published_date': self.published_date,
+            'created_at': self.created_at,
+            'updated_at': self.updated_at
+        }
+    
+    @classmethod
+    def from_dict(cls, data: Dict[str, Any]) -> 'News':
+        """Создание объекта из словаря"""
+        return cls(
+            id=uuid.UUID(data['id']) if data.get('id') else None,
+            title=data['title'],
+            url=data.get('url'),
+            content=data.get('content'),
+            source=data['source'],
+            search_query=data['search_query'],
+            published_date=data.get('published_date'),
+            created_at=data.get('created_at'),
+            updated_at=data.get('updated_at')
+        )

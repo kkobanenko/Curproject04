@@ -12,7 +12,7 @@ from datetime import datetime, timedelta
 import pandas as pd
 
 from config import settings
-from models import Source, Criterion, Event
+from models import Source, Criterion, Event, News
 
 logger = logging.getLogger(__name__)
 
@@ -151,6 +151,106 @@ class PostgresManager:
                 cur.execute("SELECT * FROM criteria WHERE id = %s", (criterion_id,))
                 result = cur.fetchone()
                 return dict(result) if result else None
+    
+    # Методы для работы с новостями
+    def create_news(self, news: News) -> bool:
+        """Создание новой новости"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("""
+                        INSERT INTO news (id, title, url, content, source, search_query, published_date, created_at, updated_at)
+                        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    """, (
+                        str(news.id),
+                        news.title,
+                        news.url,
+                        news.content,
+                        news.source,
+                        news.search_query,
+                        news.published_date,
+                        news.created_at,
+                        news.updated_at
+                    ))
+                    conn.commit()
+                    return True
+        except Exception as e:
+            logger.error(f"Ошибка создания новости: {e}")
+            return False
+    
+    def get_news(self, limit: int = 50) -> List[Dict[str, Any]]:
+        """Получение списка новостей"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM news 
+                        ORDER BY created_at DESC 
+                        LIMIT %s
+                    """, (limit,))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Ошибка получения новостей: {e}")
+            return []
+    
+    def get_news_by_url(self, url: str) -> Optional[Dict[str, Any]]:
+        """Получение новости по URL"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("SELECT * FROM news WHERE url = %s", (url,))
+                    result = cur.fetchone()
+                    return dict(result) if result else None
+        except Exception as e:
+            logger.error(f"Ошибка получения новости по URL: {e}")
+            return None
+    
+    def get_news_by_source(self, source: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Получение новостей по источнику"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM news 
+                        WHERE source = %s 
+                        ORDER BY created_at DESC 
+                        LIMIT %s
+                    """, (source, limit))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Ошибка получения новостей по источнику: {e}")
+            return []
+    
+    def get_news_by_search_query(self, search_query: str, limit: int = 50) -> List[Dict[str, Any]]:
+        """Получение новостей по поисковому запросу"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor(cursor_factory=RealDictCursor) as cur:
+                    cur.execute("""
+                        SELECT * FROM news 
+                        WHERE search_query ILIKE %s 
+                        ORDER BY created_at DESC 
+                        LIMIT %s
+                    """, (f"%{search_query}%", limit))
+                    results = cur.fetchall()
+                    return [dict(row) for row in results]
+        except Exception as e:
+            logger.error(f"Ошибка получения новостей по запросу: {e}")
+            return []
+    
+    def delete_news(self, news_id: str) -> bool:
+        """Удаление новости"""
+        try:
+            with self.get_connection() as conn:
+                with conn.cursor() as cur:
+                    cur.execute("DELETE FROM news WHERE id = %s", (news_id,))
+                    conn.commit()
+                    return cur.rowcount > 0
+        except Exception as e:
+            logger.error(f"Ошибка удаления новости: {e}")
+            return False
 
 
 class ClickHouseManager:

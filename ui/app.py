@@ -10,10 +10,15 @@ import plotly.graph_objects as go
 from datetime import datetime, timedelta
 import time
 import json
+import logging
+from typing import List, Dict, Any
 
 from config import settings
 from database import postgres_manager, clickhouse_manager
 from redis_queue import queue_manager
+
+# Настройка логирования
+logger = logging.getLogger(__name__)
 
 # Настройка страницы
 st.set_page_config(
@@ -67,12 +72,14 @@ def main():
         st.header("📊 Навигация")
         page = st.selectbox(
             "Выберите раздел:",
-            ["📝 Анализ текста", "📈 Статистика", "🔍 История", "⚙️ Настройки"]
+            ["📝 Анализ текста", "🔍 Поиск новостей", "📈 Статистика", "🔍 История", "⚙️ Настройки"]
         )
     
     # Отображение страниц
     if page == "📝 Анализ текста":
         show_text_analysis_page()
+    elif page == "🔍 Поиск новостей":
+        show_news_search_page()
     elif page == "📈 Статистика":
         show_statistics_page()
     elif page == "🔍 История":
@@ -279,6 +286,163 @@ def show_job_results(result):
             st.plotly_chart(fig, use_container_width=True)
 
 
+def show_news_search_page():
+    """Страница поиска медицинских новостей"""
+    st.header("🔍 Поиск новостей")
+    
+    # Импортируем NewsService
+    from news_service import NewsService
+    news_service = NewsService()
+    
+    # Форма поиска новостей
+    with st.form("news_search_form"):
+        st.subheader("Поиск медицинских новостей")
+        
+        # Поле для ввода поискового запроса
+        search_query = st.text_input(
+            "Поисковый запрос:",
+            placeholder="Например: рак легких, диабет, COVID-19...",
+            help="Введите медицинскую тему для поиска новостей"
+        )
+        
+        # Выбор источников новостей
+        st.subheader("Источники новостей")
+        
+        col1, col2, col3 = st.columns(3)
+        
+        with col1:
+            pubmed_enabled = st.checkbox(
+                "PubMed", 
+                value=True,
+                help="Поиск в медицинской литературе PubMed"
+            )
+        
+        with col2:
+            biomcp_enabled = st.checkbox(
+                "BioMCP", 
+                value=True,
+                help="Поиск через BioMCP (статьи и клинические исследования)"
+            )
+        
+        with col3:
+            web_search_enabled = st.checkbox(
+                "Web Search", 
+                value=True,
+                help="Поиск в интернете"
+            )
+        
+        # Настройки поиска
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            limit_per_source = st.number_input(
+                "Результатов на источник:",
+                min_value=1,
+                max_value=20,
+                value=5,
+                help="Максимальное количество результатов от каждого источника"
+            )
+        
+        with col2:
+            if st.form_submit_button("🔍 Найти новости", use_container_width=True):
+                if search_query.strip():
+                    # Собираем выбранные источники
+                    selected_sources = []
+                    if pubmed_enabled:
+                        selected_sources.append('pubmed')
+                    if biomcp_enabled:
+                        selected_sources.append('biomcp')
+                    if web_search_enabled:
+                        selected_sources.append('web_search')
+                    
+                    if selected_sources:
+                        # Выполняем поиск
+                        with st.spinner("Поиск новостей..."):
+                            try:
+                                news_results = news_service.search_medical_news(
+                                    query=search_query.strip(),
+                                    sources=selected_sources,
+                                    limit=limit_per_source
+                                )
+                                
+                                if news_results:
+                                    st.success(f"✅ Найдено {len(news_results)} новостей")
+                                    
+                                    # Сохраняем результаты в session state для отображения
+                                    st.session_state['news_search_results'] = news_results
+                                    st.session_state['news_search_query'] = search_query.strip()
+                                    
+                                    # Показываем результаты
+                                    show_news_search_results(news_results)
+                                else:
+                                    st.warning("📰 Новости по данному запросу не найдены")
+                                    
+                            except Exception as e:
+                                st.error(f"❌ Ошибка поиска новостей: {e}")
+                                logger.error(f"Ошибка поиска новостей: {e}")
+                    else:
+                        st.warning("⚠️ Выберите хотя бы один источник для поиска")
+                else:
+                    st.warning("⚠️ Введите поисковый запрос")
+    
+    # Отображение последних результатов поиска
+    if 'news_search_results' in st.session_state:
+        st.subheader("📰 Последние результаты поиска")
+        show_news_search_results(st.session_state['news_search_results'])
+
+
+def show_news_search_results(news_results: List[Dict[str, Any]]):
+    """Отображение результатов поиска новостей"""
+    if not news_results:
+        st.info("📰 Нет результатов для отображения")
+        return
+    
+    # Группируем новости по источникам
+    sources = {}
+    for news in news_results:
+        source = news.get('source', 'unknown')
+        if source not in sources:
+            sources[source] = []
+        sources[source].append(news)
+    
+    # Отображаем новости по источникам
+    for source, news_list in sources.items():
+        st.subheader(f"📰 {source.upper()}")
+        
+        for news in news_list:
+            with st.expander(f"📄 {news.get('title', 'Без заголовка')}", expanded=False):
+                col1, col2 = st.columns([3, 1])
+                
+                with col1:
+                    # Основная информация о новости
+                    st.write(f"**Источник:** {news.get('source', 'N/A')}")
+                    st.write(f"**Дата:** {news.get('created_at', 'N/A')}")
+                    
+                    if news.get('url'):
+                        st.write(f"**URL:** {news['url']}")
+                    
+                    if news.get('content'):
+                        st.write("**Содержание:**")
+                        st.text(news['content'])
+                
+                with col2:
+                    # Кнопки действий
+                    if news.get('url'):
+                        st.link_button(
+                            "🔗 Перейти", 
+                            news['url'], 
+                            help="Открыть новость в браузере"
+                        )
+                    
+                    # Кнопка для передачи в анализ текстов (пока не реализована)
+                    st.button(
+                        "📝 Анализ текста", 
+                        key=f"analyze_{news['id']}",
+                        help="Передать новость в анализ текстов (в разработке)",
+                        disabled=True
+                    )
+
+
 def show_statistics_page():
     """Страница статистики"""
     st.header("📈 Статистика")
@@ -448,6 +612,22 @@ def show_history_page():
     """Страница истории"""
     st.header("🔍 История")
     
+    # Подзакладки в истории
+    history_tab = st.selectbox(
+        "Выберите раздел истории:",
+        ["📋 События", "📰 Новости"]
+    )
+    
+    if history_tab == "📋 События":
+        show_events_history()
+    elif history_tab == "📰 Новости":
+        show_news_history()
+
+
+def show_events_history():
+    """Отображение истории событий"""
+    st.subheader("📋 История событий")
+    
     # Фильтры
     col1, col2 = st.columns(2)
     
@@ -589,6 +769,158 @@ def show_history_page():
     
     except Exception as e:
         st.error(f"❌ Ошибка загрузки истории: {e}")
+
+
+def show_news_history():
+    """Отображение истории новостей"""
+    st.subheader("📰 История новостей")
+    
+    # Фильтры
+    col1, col2 = st.columns(2)
+    
+    with col1:
+        limit = st.selectbox("Количество записей:", [10, 25, 50, 100], index=3, key="news_limit")
+    
+    with col2:
+        if st.button("🔄 Обновить", key="news_refresh"):
+            st.rerun()
+    
+    try:
+        # Получаем последние новости
+        news_list = postgres_manager.get_news(limit)
+        
+        if news_list:
+            # Отображаем таблицу новостей
+            st.subheader("📰 Последние новости")
+            
+            # Фильтры для таблицы
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                show_source_filter = st.selectbox(
+                    "Фильтр по источнику:",
+                    ["Все источники"] + list(set([news.get('source', 'unknown') for news in news_list])),
+                    key="news_source_filter"
+                )
+            
+            with col2:
+                if st.button("🗑️ Очистить фильтры", key="clear_news_filters"):
+                    st.rerun()
+            
+            # Применяем фильтр по источнику
+            if show_source_filter != "Все источники":
+                news_list = [news for news in news_list if news.get('source') == show_source_filter]
+            
+            if news_list:
+                # Отображаем таблицу с кнопками действий
+                st.subheader("📰 Последние новости")
+                
+                # Заголовки таблицы
+                header_col1, header_col2, header_col3, header_col4, header_col5, header_col6, header_col7 = st.columns([2, 3, 1, 1, 1, 1, 1])
+                
+                with header_col1:
+                    st.write("**📅 Дата создания**")
+                with header_col2:
+                    st.write("**📝 Заголовок**")
+                with header_col3:
+                    st.write("**📰 Источник**")
+                with header_col4:
+                    st.write("**🔍 Запрос**")
+                with header_col5:
+                    st.write("**📄 Содержание**")
+                with header_col6:
+                    st.write("**🔗 Перейти**")
+                with header_col7:
+                    st.write("**👁️ Просмотр**")
+                
+                st.divider()
+                
+                # Создаем таблицу с кнопками для каждой строки
+                for idx, news in enumerate(news_list):
+                    with st.container():
+                        col1, col2, col3, col4, col5, col6, col7 = st.columns([2, 3, 1, 1, 1, 1, 1])
+                        
+                        with col1:
+                            created_at = news.get('created_at', 'N/A')
+                            if created_at != 'N/A':
+                                try:
+                                    created_at = pd.to_datetime(created_at).strftime('%Y-%m-%d %H:%M')
+                                except:
+                                    pass
+                            st.write(f"**{created_at}**")
+                        
+                        with col2:
+                            title = news.get('title', 'Без заголовка')
+                            st.write(f"**{title[:50]}{'...' if len(title) > 50 else ''}**")
+                        
+                        with col3:
+                            source = news.get('source', 'N/A')
+                            st.write(f"**{source}**")
+                        
+                        with col4:
+                            search_query = news.get('search_query', 'N/A')
+                            st.write(f"**{search_query[:20]}{'...' if len(search_query) > 20 else ''}**")
+                        
+                        with col5:
+                            content = news.get('content', '')
+                            if content:
+                                st.write(f"{content[:30]}{'...' if len(content) > 30 else ''}")
+                            else:
+                                st.write("—")
+                        
+                        with col6:
+                            # Кнопка "Перейти" - только если есть URL
+                            url = news.get('url')
+                            if url:
+                                st.link_button("🔗 Перейти", url, help="Открыть новость в браузере")
+                            else:
+                                st.write("—")
+                        
+                        with col7:
+                            # Кнопка "Просмотр" - показать текст в модальном окне
+                            if st.button("👁️ Просмотр", key=f"view_news_{idx}", help="Просмотр новости"):
+                                st.session_state[f'show_news_{idx}'] = True
+                        
+                        # Модальное окно для просмотра новости
+                        if st.session_state.get(f'show_news_{idx}', False):
+                            with st.expander(f"📄 Новость (строка {idx + 1})", expanded=True):
+                                try:
+                                    # Отображаем полную информацию о новости
+                                    st.write(f"**Заголовок:** {news.get('title', 'N/A')}")
+                                    st.write(f"**Источник:** {news.get('source', 'N/A')}")
+                                    st.write(f"**Поисковый запрос:** {news.get('search_query', 'N/A')}")
+                                    st.write(f"**Дата создания:** {news.get('created_at', 'N/A')}")
+                                    
+                                    if news.get('url'):
+                                        st.write(f"**URL:** {news['url']}")
+                                    
+                                    if news.get('content'):
+                                        st.text_area(
+                                            "Содержание новости:",
+                                            value=news['content'],
+                                            height=300,
+                                            disabled=True
+                                        )
+                                    else:
+                                        st.warning("📄 Содержание новости недоступно")
+                                        
+                                except Exception as e:
+                                    st.error(f"❌ Ошибка загрузки новости: {e}")
+                                
+                                # Кнопка закрытия
+                                if st.button("❌ Закрыть", key=f"close_news_{idx}"):
+                                    st.session_state[f'show_news_{idx}'] = False
+                                    st.rerun()
+                        
+                        st.divider()
+            else:
+                st.info("📰 Нет новостей для отображения")
+        
+        else:
+            st.info("📰 Нет данных для отображения")
+    
+    except Exception as e:
+        st.error(f"❌ Ошибка загрузки истории новостей: {e}")
 
 
 def show_settings_page():
