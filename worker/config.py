@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     class Config:
         env_file = ".env"
         case_sensitive = False
+        extra = "ignore"  # Игнорируем дополнительные поля
 
 
 # Создаем глобальный экземпляр настроек
