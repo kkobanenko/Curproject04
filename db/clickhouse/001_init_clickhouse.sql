@@ -33,8 +33,8 @@ CREATE INDEX IF NOT EXISTS idx_events_is_match ON events(is_match) TYPE bloom_fi
 CREATE INDEX IF NOT EXISTS idx_events_source_hash ON events(source_hash) TYPE bloom_filter GRANULARITY 1;
 
 -- Комментарии к таблице
-ALTER TABLE events COMMENT COLUMN event_id = 'Уникальный идентификатор события';
-ALTER TABLE events COMMENT COLUMN source_hash = 'SHA-256 хеш нормализованного текста';
-ALTER TABLE events COMMENT COLUMN is_match = 'Флаг соответствия критерию (0/1)';
-ALTER TABLE events COMMENT COLUMN confidence = 'Уверенность модели (0.0-1.0)';
-ALTER TABLE events COMMENT COLUMN latency_ms = 'Время выполнения анализа в миллисекундах';
+ALTER TABLE events COMMENT COLUMN event_id 'Уникальный идентификатор события';
+ALTER TABLE events COMMENT COLUMN source_hash 'SHA-256 хеш нормализованного текста';
+ALTER TABLE events COMMENT COLUMN is_match 'Флаг соответствия критерию (0/1)';
+ALTER TABLE events COMMENT COLUMN confidence 'Уверенность модели (0.0-1.0)';
+ALTER TABLE events COMMENT COLUMN latency_ms 'Время выполнения анализа в миллисекундах';

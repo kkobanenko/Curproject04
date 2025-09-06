@@ -2,48 +2,48 @@
   "unit_tests": {
     "llm/test_api.py": {
       "success": true,
-      "duration": 0.5013175010681152,
+      "duration": 0.782416820526123,
       "description": "LLM API тесты"
     },
     "db/test_models.py": {
       "success": true,
-      "duration": 0.4073293209075928,
+      "duration": 0.7739894390106201,
       "description": "Database Models тесты"
     },
     "worker/test_tasks.py": {
       "success": true,
-      "duration": 0.7901468276977539,
+      "duration": 1.151616096496582,
       "description": "Worker Tasks тесты"
     },
     "ui/test_app.py": {
       "success": true,
-      "duration": 0.8573951721191406,
+      "duration": 1.349348783493042,
       "description": "UI App тесты"
     }
   },
   "integration_tests": {
     "full_flow": {
       "success": true,
-      "duration": 1.2240638732910156,
+      "duration": 1.2084243297576904,
       "description": "Integration тесты полного flow"
     },
     "system": {
       "success": true,
-      "duration": 5.520651340484619,
+      "duration": 5.587384223937988,
       "description": "Интеграционный тест системы"
     }
   },
   "load_tests": {
     "performance": {
       "success": true,
-      "duration": 3.4348297119140625,
+      "duration": 3.591496706008911,
       "description": "Load тесты производительности"
     }
   },
   "security_tests": {
     "security": {
       "success": true,
-      "duration": 1.2715568542480469,
+      "duration": 0.9495155811309814,
       "description": "Security тесты безопасности"
     }
   },
@@ -51,6 +51,6 @@
     "total_tests": 8,
     "passed_tests": 8,
     "failed_tests": 0,
-    "total_time": 14.007290601730347
+    "total_time": 15.394191980361938
   }
 }

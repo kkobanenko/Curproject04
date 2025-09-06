@@ -1,0 +1,149 @@
+# Docker Compose конфигурация для тестирования
+# Используется в CI/CD pipeline для запуска тестов в изолированной среде
+
+version: '3.8'
+
+services:
+  # UI сервис для тестов
+  ui-test:
+    build:
+      context: ../../ui
+      dockerfile: Dockerfile
+    ports:
+      - "8506:8501"  # Другой порт для тестов
+    environment:
+      - REDIS_URL=redis://redis-test:6379/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg-test:5432/pharma_analysis_test
+      - CLICKHOUSE_URL=http://ch-test:8123
+      - OLLAMA_URL=http://llm-test:11434
+      - ENVIRONMENT=test
+    depends_on:
+      - redis-test
+      - pg-test
+      - ch-test
+      - llm-test
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8501/_stcore/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - test
+
+  # Worker сервис для тестов
+  worker-test:
+    build:
+      context: ../../worker
+      dockerfile: Dockerfile
+    ports:
+      - "8001:8000"  # Другой порт для тестов
+    environment:
+      - REDIS_URL=redis://redis-test:6379/0
+      - POSTGRES_URL=postgresql://postgres:postgres@pg-test:5432/pharma_analysis_test
+      - CLICKHOUSE_URL=http://ch-test:8123
+      - OLLAMA_URL=http://llm-test:11434
+      - OLLAMA_MODEL=llama3:8b
+      - NUM_CTX=8192
+      - ENVIRONMENT=test
+    depends_on:
+      - redis-test
+      - pg-test
+      - ch-test
+      - llm-test
+    healthcheck:
+      test: ["CMD", "python", "-c", "import redis; redis.Redis.from_url('redis://redis-test:6379/0').ping()"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - test
+
+  # Redis для тестов
+  redis-test:
+    image: redis:7-alpine
+    ports:
+      - "6384:6379"  # Другой порт для тестов
+    volumes:
+      - redis_test_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - test
+
+  # PostgreSQL для тестов
+  pg-test:
+    image: postgres:15-alpine
+    ports:
+      - "5437:5432"  # Другой порт для тестов
+    environment:
+      - POSTGRES_DB=pharma_analysis_test
+      - POSTGRES_USER=postgres
+      - POSTGRES_PASSWORD=postgres
+    volumes:
+      - postgres_test_data:/var/lib/postgresql/data
+      - ../../db/migrations:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d pharma_analysis_test"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - test
+
+  # ClickHouse для тестов
+  ch-test:
+    image: clickhouse/clickhouse-server:23.8-alpine
+    ports:
+      - "8128:8123"  # HTTP - другой порт для тестов
+      - "9005:9000"  # Native - другой порт для тестов
+    environment:
+      - CLICKHOUSE_DB=pharma_analysis_test
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=
+    volumes:
+      - clickhouse_test_data:/var/lib/clickhouse
+      - ../../db/clickhouse:/docker-entrypoint-initdb.d
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:8123/ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    profiles:
+      - test
+
+  # LLM сервис для тестов (упрощенная версия)
+  llm-test:
+    build:
+      context: ../../llm
+      dockerfile: Dockerfile
+    ports:
+      - "11439:11434"  # Другой порт для тестов
+    environment:
+      - OLLAMA_MODELS=llama3:8b
+      - OLLAMA_NUM_PARALLEL=2  # Меньше параллельных запросов для тестов
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - ENVIRONMENT=test
+    volumes:
+      - ollama_test_data:/root/.ollama
+    deploy:
+      resources:
+        limits:
+          cpus: '2.0'  # Меньше ресурсов для тестов
+        reservations:
+          cpus: '1.0'
+    healthcheck:
+      test: ["CMD", "bash", "-c", "exec 3<>/dev/tcp/127.0.0.1/11434 && echo -e 'GET /api/tags HTTP/1.1\r\nHost: 127.0.0.1:11434\r\n\r\n' >&3 && timeout 5 cat <&3 | head -1 | grep -q '200 OK'"]
+      interval: 30s
+      timeout: 15s
+      retries: 3
+    profiles:
+      - test
+
+volumes:
+  redis_test_data:
+  postgres_test_data:
+  clickhouse_test_data:
+  ollama_test_data:

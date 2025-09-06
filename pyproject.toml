@@ -1,0 +1,192 @@
+# Конфигурация для инструментов разработки Python
+# Этот файл содержит настройки для Black, isort, mypy, pytest и других инструментов
+
+[build-system]
+requires = ["setuptools>=45", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pharma-analysis"
+version = "1.0.0"
+description = "MVP платформа анализа фармацевтических текстов с использованием LLM"
+authors = [
+    {name = "Pharma Analysis Team", email = "team@pharma-analysis.com"}
+]
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.11"
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Healthcare Industry",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+
+# Настройки для Black (форматирование кода)
+[tool.black]
+line-length = 100
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # Исключаем папки с кэшем и временными файлами
+  \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | _build
+  | buck-out
+  | build
+  | dist
+  | __pycache__
+)/
+'''
+
+# Настройки для isort (сортировка импортов)
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 100
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+known_first_party = ["ui", "worker", "llm", "db", "tests"]
+known_third_party = ["streamlit", "redis", "psycopg2", "clickhouse", "requests", "pytest"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+skip_glob = ["*/migrations/*", "*/__pycache__/*"]
+
+# Настройки для mypy (проверка типов)
+[tool.mypy]
+python_version = "3.11"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+disallow_untyped_decorators = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_no_return = true
+warn_unreachable = true
+strict_equality = true
+show_error_codes = true
+
+# Настройки для конкретных модулей
+[[tool.mypy.overrides]]
+module = [
+    "streamlit.*",
+    "redis.*",
+    "psycopg2.*",
+    "clickhouse.*",
+    "requests.*",
+    "pytest.*",
+    "structlog.*",
+    "rq.*",
+    "ollama.*"
+]
+ignore_missing_imports = true
+
+# Настройки для pytest
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = [
+    "-ra",
+    "--strict-markers",
+    "--strict-config",
+    "--cov-report=term-missing",
+    "--cov-report=html",
+    "--cov-report=xml",
+    "--cov-fail-under=50"
+]
+testpaths = [
+    "tests",
+    "ui/test_*.py",
+    "worker/test_*.py", 
+    "llm/test_*.py",
+    "db/test_*.py"
+]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "security: marks tests as security tests",
+    "load: marks tests as load tests"
+]
+filterwarnings = [
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning"
+]
+
+# Настройки для coverage
+[tool.coverage.run]
+source = ["worker", "llm", "db"]
+omit = [
+    "*/tests/*",
+    "*/test_*.py",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/env/*",
+    "ui/app.py",
+    "ui/app_demo.py",
+    "ui/config.py",
+    "ui/database.py",
+    "ui/models.py",
+    "ui/news_service.py",
+    "ui/redis_queue.py",
+    "ui/web_search.py",
+    "worker/api.py",
+    "worker/custom_worker.py",
+    "worker/database.py",
+    "worker/worker.py"
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+
+[tool.coverage.html]
+directory = "htmlcov"
+
+# Настройки для bandit (проверка безопасности)
+[tool.bandit]
+exclude_dirs = ["tests", "migrations", "__pycache__"]
+skips = ["B101", "B601"]  # Пропускаем проверки для тестов
+
+# Настройки для flake8
+[tool.flake8]
+max-line-length = 100
+extend-ignore = ["E203", "W503", "E501"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "migrations",
+    ".venv",
+    "venv",
+    ".pytest_cache",
+    "htmlcov"
+]
+per-file-ignores = [
+    "__init__.py:F401",  # Игнорируем неиспользуемые импорты в __init__.py
+    "tests/*:S101"       # Игнорируем assert в тестах
+]
+
+# Настройки для safety (проверка уязвимостей)
+[tool.safety]
+output = "json"
+full_report = true
